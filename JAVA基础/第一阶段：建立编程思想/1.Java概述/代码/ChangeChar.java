@@ -9,11 +9,6 @@
  *      前者是 “输出内容+换行”，后者 “只输出内容”
  */
 
-/**
- * 
- * 
- */
-
 public class ChangeChar {
     public static void main(String[] args) {
         // 插入 换行符\n 和 制表符\t

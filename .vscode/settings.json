@@ -1,6 +1,8 @@
 {
     "cSpell.words": [
-        "javac"
+        "javac",
+        "println"
     ],
-    "java.dependency.syncWithFolderExplorer": false
+    "java.dependency.syncWithFolderExplorer": false,
+    "java.debug.settings.onBuildFailureProceed": true
 }

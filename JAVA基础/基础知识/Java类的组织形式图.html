@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Java类组织结构详解</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background-color: #f4f7f6;
+        }
+
+        h1,
+        h2 {
+            color: #004d40;
+            border-bottom: 2px solid #e0f2f1;
+            padding-bottom: 5px;
+        }
+
+        .box-container {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 30px;
+        }
+
+        .box {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 颜色定义 */
+        .file-box {
+            border: 3px solid #004d40;
+            background-color: #e0f2f1;
+            padding: 20px;
+            width: 550px;
+        }
+
+        /* .java 文件 */
+        .class-header {
+            background-color: #a7ffeb;
+            padding: 8px;
+            border-bottom: 1px dashed #004d40;
+            font-weight: bold;
+        }
+
+        /* class 定义行 */
+        .imports-box {
+            background-color: #c8e6c9;
+            border-left: 5px solid #388e3c;
+            margin: 10px 0;
+            padding: 5px 10px;
+        }
+
+        /* import */
+        .package-box {
+            background-color: #ffcdd2;
+            border-left: 5px solid #d32f2f;
+            margin: 10px 0;
+            padding: 5px 10px;
+        }
+
+        /* package */
+        .class-body {
+            border: 2px solid #009688;
+            margin-top: 10px;
+            padding: 15px;
+            background-color: #ffffff;
+        }
+
+        /* 类体 {} */
+        .member-section {
+            border: 1px dashed #bdbdbd;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .member-section h3 {
+            margin-top: 0;
+            color: #00796b;
+            font-size: 1.1em;
+        }
+
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #00796b;
+            color: white;
+        }
+
+        /* 代码块 */
+        pre {
+            background-color: #37474f;
+            color: #eceff1;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 0.9em;
+        }
+
+        /* 关系 */
+        .relationship {
+            margin-top: 30px;
+            padding: 15px;
+            background-color: #fff9c4;
+            border: 1px solid #fbc02d;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Java 类组织结构详解 (Class Structure)</h1>
+    <p>Java 类的组织是高度结构化的，用于确保代码的模块化和清晰性。以下是 Java 源代码文件（.java）的完整构成。</p>
+
+    <h2>一、可视化结构模型</h2>
+    <div class="box-container">
+        <div class="file-box">
+            <div class="package-box">
+                <code>package com.example.project;</code>
+                <p style="font-size: 0.9em; color: #d32f2f; margin: 5px 0 0 0;">(必须在文件顶部)</p>
+            </div>
+
+            <div class="imports-box">
+                <code>import java.util.List;</code><br>
+                <code>import com.external.Library;</code>
+                <p style="font-size: 0.9em; color: #388e3c; margin: 5px 0 0 0;">(外部依赖声明)</p>
+            </div>
+
+            <div class="class-header">
+                <code>public class MyService {</code>
+            </div>
+
+            <div class="class-body">
+                <h3>类体 (Class Body)</h3>
+
+                <div class="member-section" style="border-color: #0d47a1;">
+                    <h3>1. 字段 (Fields / 成员变量)</h3>
+                    <p><code>private static final int COUNT = 0;</code><br><code>private String name;</code></p>
+                </div>
+
+                <div class="member-section" style="border-color: #880e4f;">
+                    <h3>2. 构造方法 (Constructors)</h3>
+                    <p><code>public MyService() { ... }</code></p>
+                </div>
+
+                <div class="member-section" style="border-color: #4a148c;">
+                    <h3>3. 方法 (Methods / 成员方法)</h3>
+                    <p><code>public void process() { ... }</code></p>
+                </div>
+
+                <div class="member-section" style="border-color: #e65100;">
+                    <h3>4. 嵌套类型 (Nested Types)</h3>
+                    <p><code>enum Status { ACTIVE, INACTIVE }</code></p>
+                </div>
+
+                <p style="text-align: right; margin: 0;"><code>}</code> (类定义结束)</p>
+            </div>
+
+            <p style="text-align: right; margin-top: 5px; font-size: 0.9em;">(文件结束)</p>
+        </div>
+    </div>
+
+    <h2>二、各组件的作用与关系</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>组件</th>
+                <th>作用 (What)</th>
+                <th>隶属关系 (Relationship)</th>
+                <th>内存/执行时机</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Package (包)</td>
+                <td>为类提供命名空间，防止与其他开发者/项目中的同名类冲突。</td>
+                <td>包含该文件中的所有类。</td>
+                <td>编译和部署时。</td>
+            </tr>
+            <tr>
+                <td>Import (导入)</td>
+                <td>声明当前类对外部类或接口的依赖，允许使用简短名称。</td>
+                <td>是类外部的依赖声明，独立于类体。</td>
+                <td>编译时。</td>
+            </tr>
+            <tr>
+                <td>Class Header (类头)</td>
+                <td>定义类的访问权限、名称、继承关系 (`extends`) 和 接口实现 (`implements`)。</td>
+                <td>定义了其下所有成员的边界和性质。</td>
+                <td>类加载时。</td>
+            </tr>
+            <tr>
+                <td>Fields (字段)</td>
+                <td>存储该类或对象的状态数据（变量）。</td>
+                <td>数据成员，是方法操作的对象。</td>
+                <td>实例字段： 对象创建（堆）； 静态字段： 类加载（方法区）。</td>
+            </tr>
+            <tr>
+                <td>Constructors (构造方法)</td>
+                <td>特殊的“方法”，用于创建对象实例和初始化字段。</td>
+                <td>初始化工具，与对象实例化紧密相关。</td>
+                <td>使用 <code>new</code> 关键字创建对象时。</td>
+            </tr>
+            <tr>
+                <td>Methods (方法)</td>
+                <td>定义该类或对象的行为逻辑（功能）。</td>
+                <td>行为成员，定义如何处理字段数据。</td>
+                <td>方法被调用时（在栈上执行）。</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="relationship">
+        <h3>💡 核心联系总结：</h3>
+        <p><strong>封装（Encapsulation）：</strong> 字段 (数据) 和方法 (行为) 被 Class Header 定义的边界紧密地封装在一起，共同描述一个客观实体。</p>
+        <p><strong>依赖（Dependency）：</strong> Import 语句定义了该类对外部世界的依赖；Class Header 定义了该类对父类或接口的继承依赖。</p>
+        <p><strong>生命周期（Lifecycle）：</strong> 构造方法决定了对象的初始状态；方法操作了字段中存储的数据，但它们的执行生命周期则由 JVM 的栈管理。</p>
+    </div>
+
+    <h2>三、完整的 Java 代码示例</h2>
+    <pre>
+package com.mycompany.services; // 1. 包声明
+
+import java.time.LocalDate;     // 2. 导入外部依赖
+import java.util.ArrayList;
+
+/
+ * 这是一个客户服务类，演示了标准结构。
+ */
+public class CustomerService { // 3. 类头定义
+
+    // --- 4. 字段 ---
+    private static final int MAX_COUNT = 100; // 静态字段 (类级别)
+    private String customerName;              // 实例字段 (对象级别)
+    private LocalDate registrationDate;
+
+    // --- 5. 构造方法 ---
+    public CustomerService(String name) {
+        this.customerName = name;
+        this.registrationDate = LocalDate.now();
+    }
+
+    // --- 6. 方法 ---
+    /
+     * 获取客户的注册天数。
+     */
+    public long getDaysSinceRegistration() {
+        return registrationDate.until(LocalDate.now()).getDays();
+    }
+
+    // 静态方法：无需对象实例即可调用
+    public static int getMaxCustomers() {
+        return MAX_COUNT;
+    }
+}
+    </pre>
+
+</body>
+
+</html>
