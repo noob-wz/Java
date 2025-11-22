@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Java 值传递 vs 引用传递 内存可视化</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+            max-width: 1200px;
+            height: 600px;
+            gap: 20px;
+        }
+
+        /* 代码区域 */
+        .code-panel {
+            flex: 1;
+            background-color: #282c34;
+            color: #abb2bf;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            overflow: auto;
+            position: relative;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .line {
+            padding: 2px 5px;
+            border-radius: 4px;
+        }
+
+        .line.active {
+            background-color: #4b5263;
+            border-left: 3px solid #61afef;
+            color: #fff;
+        }
+
+        /* 内存可视化区域 */
+        .memory-panel {
+            flex: 2;
+            background-color: #fff;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            position: relative;
+            display: flex;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .stack-area,
+        .heap-area {
+            flex: 1;
+            padding: 20px;
+            position: relative;
+        }
+
+        .stack-area {
+            background-color: #e3f2fd;
+            border-right: 2px dashed #90caf9;
+        }
+
+        .heap-area {
+            background-color: #e8f5e9;
+        }
+
+        .area-title {
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 栈帧 */
+        .stack-frame {
+            border: 2px solid #1976d2;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 20px;
+            transition: all 0.5s ease;
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+
+        .stack-frame.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .frame-title {
+            font-size: 12px;
+            color: #1976d2;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #1976d2;
+        }
+
+        /* 变量盒子 */
+        .variable {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            padding: 5px;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .var-name {
+            width: 50px;
+            font-weight: bold;
+            color: #d32f2f;
+        }
+
+        .var-value {
+            width: 80px;
+            text-align: center;
+            background: #eee;
+            border: 1px solid #999;
+            padding: 2px;
+            font-family: monospace;
+        }
+
+        .var-value.highlight {
+            background-color: #ffeb3b;
+            animation: pulse 1s;
+        }
+
+        /* 堆对象 */
+        .heap-object {
+            position: absolute;
+            width: 120px;
+            padding: 10px;
+            border: 2px solid #388e3c;
+            background: #fff;
+            border-radius: 8px;
+            top: 50px;
+            left: 50px;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .heap-object.show {
+            opacity: 1;
+        }
+
+        .heap-addr {
+            font-size: 10px;
+            color: #888;
+            text-align: right;
+        }
+
+        /* 控制栏 */
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #1565c0;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .explanation {
+            margin-top: 10px;
+            font-size: 16px;
+            color: #d32f2f;
+            font-weight: bold;
+            height: 40px;
+        }
+
+        /* SVG连线层 */
+        #arrow-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .comment {
+            color: #5c6370;
+            font-style: italic;
+        }
+
+        .keyword {
+            color: #c678dd;
+        }
+
+        .type {
+            color: #e5c07b;
+        }
+
+        .method {
+            color: #61afef;
+        }
+
+        .string {
+            color: #98c379;
+        }
+
+        .number {
+            color: #d19a66;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Java 值传递 vs 引用传递</h1>
+
+    <div class="container">
+        <div class="code-panel" id="codeBox">
+            <div class="line" id="l1"><span class="keyword">public class</span> MemoryTest {</div>
+            <div class="line" id="l2"> <span class="keyword">public static void</span> <span
+                    class="method">main</span>(String[] args) {</div>
+            <div class="line" id="l3"> <span class="type">int</span> a = <span class="number">10</span>;</div>
+            <div class="line" id="l4"> <span class="type">int</span>[] arr = {<span class="number">1</span>, <span
+                    class="number">2</span>};</div>
+            <div class="line" id="l5"> <span class="comment">// 调用方法修改</span></div>
+            <div class="line" id="l6"> <span class="method">change</span>(a, arr);</div>
+            <div class="line" id="l7"> <span class="comment">// 结果验证</span></div>
+            <div class="line" id="l8"> System.out.println(a); <span class="comment">// 依然是 10</span></div>
+            <div class="line" id="l9"> System.out.println(arr[0]); <span class="comment">// 变成了 99</span></div>
+            <div class="line" id="l10"> }</div>
+            <div class="line" id="l11"></div>
+            <div class="line" id="l12"> <span class="keyword">public static void</span> <span
+                    class="method">change</span>(<span class="type">int</span> x, <span class="type">int</span>[] y) {
+            </div>
+            <div class="line" id="l13"> x = <span class="number">20</span>; <span class="comment">// 修改基本类型</span></div>
+            <div class="line" id="l14"> y[0] = <span class="number">99</span>; <span class="comment">// 修改引用类型堆数据</span>
+            </div>
+            <div class="line" id="l15"> }</div>
+            <div class="line" id="l16">}</div>
+        </div>
+
+        <div class="memory-panel">
+            <svg id="arrow-layer"></svg>
+            <div class="stack-area">
+                <div class="area-title">栈内存 (Stack)</div>
+                <div id="stack-container"></div>
+            </div>
+            <div class="heap-area">
+                <div class="area-title">堆内存 (Heap)</div>
+                <div id="heap-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="explanation" id="explainText">点击 "下一步" 开始演示</div>
+    <div class="controls">
+        <button onclick="resetDemo()">重置</button>
+        <button id="nextBtn" onclick="nextStep()">下一步</button>
+    </div>
+
+    <script>
+        let currentStep = 0;
+        const totalSteps = 10;
+
+        // DOM 元素
+        const stackContainer = document.getElementById('stack-container');
+        const heapContainer = document.getElementById('heap-container');
+        const explainText = document.getElementById('explainText');
+        const nextBtn = document.getElementById('nextBtn');
+        const arrowSvg = document.getElementById('arrow-layer');
+
+        // 数据状态
+        let mainFrame, changeFrame;
+        let heapObj;
+
+        // 步骤定义
+        const steps = [
+            {
+                text: "程序开始，JVM 为 main 方法创建栈帧。",
+                action: () => {
+                    highlight('l2');
+                    mainFrame = createStackFrame('main', 'stack-main');
+                }
+            },
+            {
+                text: "定义基本类型 int a = 10。直接在栈中存储数值 10。",
+                action: () => {
+                    highlight('l3');
+                    addVarToFrame(mainFrame, 'a', '10', 'var-main-a');
+                }
+            },
+            {
+                text: "定义引用类型 arr。栈中存地址(如0x11)，堆中存实际对象。",
+                action: () => {
+                    highlight('l4');
+                    heapObj = createHeapObject('0x11', [1, 2]);
+                    addVarToFrame(mainFrame, 'arr', '0x11', 'var-main-arr');
+                    setTimeout(() => drawArrow('var-main-arr', heapObj.id), 100);
+                }
+            },
+            {
+                text: "准备调用 change 方法。参数传递即将发生...",
+                action: () => {
+                    highlight('l6');
+                }
+            },
+            {
+                text: "进入 change 方法。关键：Java 是值传递！拷贝了 a 的值(10) 和 arr 的地址(0x11)。",
+                action: () => {
+                    highlight('l12');
+                    changeFrame = createStackFrame('change', 'stack-change');
+                    // 演示值拷贝
+                    addVarToFrame(changeFrame, 'x', '10', 'var-change-x');
+                    addVarToFrame(changeFrame, 'y', '0x11', 'var-change-y');
+
+                    // 高亮显示这是拷贝
+                    document.getElementById('var-change-x').querySelector('.var-value').classList.add('highlight');
+                    document.getElementById('var-change-y').querySelector('.var-value').classList.add('highlight');
+
+                    setTimeout(() => drawArrow('var-change-y', heapObj.id), 100);
+                }
+            },
+            {
+                text: "执行 x = 20。修改的是 change 栈帧里的 x，main 里的 a 不受影响。",
+                action: () => {
+                    highlight('l13');
+                    updateVarValue('var-change-x', '20');
+                }
+            },
+            {
+                text: "执行 y[0] = 99。y 拿着地址 0x11 找到了堆内存，修改了堆中的数据。",
+                action: () => {
+                    highlight('l14');
+                    updateHeapValue(heapObj, 0, 99);
+                    // 强调 y 也是指向同一个堆对象
+                    document.getElementById('var-change-y').querySelector('.var-value').classList.add('highlight');
+                }
+            },
+            {
+                text: "change 方法执行完毕，弹栈销毁。x 和 y 消失。",
+                action: () => {
+                    highlight('l15');
+                    changeFrame.style.opacity = '0';
+                    changeFrame.style.transform = 'translateY(-20px)';
+                    // 移除箭头
+                    arrowSvg.innerHTML = '';
+                    // 重新画 main 的箭头
+                    drawArrow('var-main-arr', heapObj.id);
+                }
+            },
+            {
+                text: "回到 main。a 还是 10 (因为只改了副本 x)。",
+                action: () => {
+                    highlight('l8');
+                    // 移除 DOM
+                    if (changeFrame) changeFrame.remove();
+                    document.getElementById('var-main-a').querySelector('.var-value').classList.add('highlight');
+                }
+            },
+            {
+                text: "但是 arr[0] 变成了 99！因为堆内存中的数据被共享修改了。",
+                action: () => {
+                    highlight('l9');
+                    heapObj.querySelector('.var-value').classList.add('highlight');
+                }
+            }
+        ];
+
+        // --- 辅助函数 ---
+
+        function nextStep() {
+            if (currentStep < steps.length) {
+                steps[currentStep].action();
+                explainText.innerText = steps[currentStep].text;
+                currentStep++;
+            }
+
+            if (currentStep >= steps.length) {
+                nextBtn.disabled = true;
+                nextBtn.innerText = "演示结束";
+            }
+        }
+
+        function resetDemo() {
+            currentStep = 0;
+            stackContainer.innerHTML = '';
+            heapContainer.innerHTML = '';
+            arrowSvg.innerHTML = '';
+            explainText.innerText = "点击 '下一步' 开始演示";
+            nextBtn.disabled = false;
+            nextBtn.innerText = "下一步";
+
+            // 清除高亮
+            document.querySelectorAll('.line').forEach(el => el.classList.remove('active'));
+        }
+
+        function highlight(id) {
+            document.querySelectorAll('.line').forEach(el => el.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            // 滚动到可见
+            document.getElementById(id).scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+
+        function createStackFrame(name, id) {
+            const frame = document.createElement('div');
+            frame.className = 'stack-frame show';
+            frame.id = id;
+            frame.innerHTML = `<div class="frame-title">${name}() 栈帧</div>`;
+            stackContainer.appendChild(frame);
+            return frame;
+        }
+
+        function addVarToFrame(frame, name, value, id) {
+            const div = document.createElement('div');
+            div.className = 'variable';
+            div.id = id;
+            div.innerHTML = `
+            <span class="var-name">${name}</span>
+            <span class="var-value">${value}</span>
+        `;
+            frame.appendChild(div);
+        }
+
+        function updateVarValue(id, newValue) {
+            const el = document.getElementById(id).querySelector('.var-value');
+            el.innerText = newValue;
+            el.classList.remove('highlight');
+            void el.offsetWidth; // trigger reflow
+            el.classList.add('highlight');
+        }
+
+        function createHeapObject(addr, values) {
+            const obj = document.createElement('div');
+            obj.className = 'heap-object show';
+            obj.id = 'heap-' + addr;
+
+            let html = `<div class="heap-addr">Address: ${addr}</div>Array: [`;
+            values.forEach((v, i) => {
+                html += `<span class="var-value" id="heap-val-${i}">${v}</span>` + (i < values.length - 1 ? ',' : '');
+            });
+            html += `]`;
+
+            obj.innerHTML = html;
+            heapContainer.appendChild(obj);
+            return obj;
+        }
+
+        function updateHeapValue(obj, index, newValue) {
+            const el = obj.querySelector(`#heap-val-${index}`);
+            el.innerText = newValue;
+            el.classList.add('highlight');
+        }
+
+        function drawArrow(fromId, toId) {
+            const fromEl = document.getElementById(fromId).querySelector('.var-value');
+            const toEl = document.getElementById(toId);
+
+            const fromRect = fromEl.getBoundingClientRect();
+            const toRect = toEl.getBoundingClientRect();
+            const containerRect = document.querySelector('.memory-panel').getBoundingClientRect();
+
+            // 计算相对于 svg 的坐标
+            const x1 = fromRect.right - containerRect.left;
+            const y1 = fromRect.top + (fromRect.height / 2) - containerRect.top;
+            const x2 = toRect.left - containerRect.left;
+            const y2 = toRect.top + (toRect.height / 2) - containerRect.top;
+
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            // 贝塞尔曲线
+            const d = `M ${x1} ${y1} C ${x1 + 50} ${y1}, ${x2 - 50} ${y2}, ${x2} ${y2}`;
+
+            path.setAttribute("d", d);
+            path.setAttribute("stroke", "#ff5722");
+            path.setAttribute("stroke-width", "2");
+            path.setAttribute("fill", "none");
+            path.setAttribute("marker-end", "url(#arrowhead)");
+
+            // 定义箭头标记
+            if (!document.getElementById('arrowhead')) {
+                const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+                defs.innerHTML = `
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#ff5722" />
+                </marker>
+            `;
+                arrowSvg.appendChild(defs);
+            }
+
+            arrowSvg.appendChild(path);
+        }
+
+    </script>
+</body>
+
+</html>
