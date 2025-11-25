@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JVM 深度内存可视化：对象诞生记 (终极版)</title>
+    <style>
+        :root {
+            --bg: #1e1e1e;
+            --panel: #2d2d30;
+            --border: #3e3e42;
+            --accent: #007acc;
+            --stack-bg: #3c2525;
+            --heap-bg: #253c35;
+            --method-bg: #3c3c25;
+            /* 方法区新背景 */
+            --text: #d4d4d4;
+            --highlight: #264f78;
+            --addr-color: #ffd700;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Consolas', monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* 顶部控制栏 */
+        .toolbar {
+            height: 50px;
+            background: #333;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+
+        h3 {
+            margin: 0;
+            color: #fff;
+        }
+
+        .btn {
+            background: var(--accent);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 6px 16px;
+            cursor: pointer;
+            font-family: inherit;
+            border-radius: 2px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover:not(:disabled) {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background: #555;
+            cursor: not-allowed;
+            opacity: 0.6;
+            transform: none;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background: #111;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* 主舞台 */
+        .stage {
+            flex: 1;
+            display: flex;
+            padding: 20px;
+            gap: 20px;
+            position: relative;
+        }
+
+        /* 区域容器 */
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .panel-header {
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--border);
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9em;
+        }
+
+        /* 1. 代码区 */
+        .code-area {
+            width: 320px;
+        }
+
+        .code-content {
+            padding: 15px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .line {
+            padding: 2px 6px;
+            border-left: 3px solid transparent;
+            transition: background 0.2s;
+        }
+
+        .line.active {
+            background: var(--highlight);
+            border-left-color: #fff;
+        }
+
+        /* 2. 内存区域样式 */
+        .stack-area {
+            width: 200px;
+            border-top: 3px solid #d16969;
+            background: linear-gradient(180deg, var(--panel) 0%, var(--stack-bg) 100%);
+        }
+
+        .heap-area {
+            flex: 1;
+            border-top: 3px solid #4ec9b0;
+            background: linear-gradient(180deg, var(--panel) 0%, var(--heap-bg) 100%);
+            overflow: hidden;
+        }
+
+        .method-area {
+            width: 280px;
+            border-top: 3px solid #dcdcaa;
+            background: linear-gradient(180deg, var(--panel) 0%, var(--method-bg) 100%);
+        }
+
+        /* 栈内存 */
+        .stack-frame {
+            margin: 15px;
+            border: 1px solid #d16969;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            position: relative;
+        }
+
+        .frame-label {
+            position: absolute;
+            top: -10px;
+            left: 10px;
+            background: #d16969;
+            color: white;
+            padding: 0 5px;
+            font-size: 0.8em;
+        }
+
+        .stack-var {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            border-bottom: 1px dashed #555;
+            align-items: center;
+            height: 24px;
+        }
+
+        .var-name {
+            color: #9cdcfe;
+        }
+
+        .var-val {
+            color: var(--addr-color);
+            font-weight: bold;
+            transition: color 0.3s;
+        }
+
+        /* 堆内存 */
+        .memory-strip {
+            margin: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .byte-row {
+            display: flex;
+            height: 30px;
+            align-items: center;
+            opacity: 0.3;
+            transition: opacity 0.5s;
+        }
+
+        .byte-row.allocated {
+            opacity: 1;
+        }
+
+        .addr-col {
+            width: 80px;
+            color: #666;
+            font-size: 0.8em;
+            text-align: right;
+            padding-right: 10px;
+            border-right: 1px solid #555;
+        }
+
+        .data-col {
+            flex: 1;
+            display: flex;
+            padding-left: 10px;
+            gap: 5px;
+        }
+
+        .byte-box {
+            width: 30px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            background: #111;
+            border: 1px solid #444;
+            font-size: 0.85em;
+            color: #aaa;
+            transition: all 0.5s;
+        }
+
+        .byte-box.header {
+            border-color: #dcdcaa;
+            color: #dcdcaa;
+        }
+
+        .byte-box.data {
+            border-color: #4ec9b0;
+            color: #fff;
+        }
+
+        .byte-box.padding {
+            border-color: #555;
+            color: #444;
+            background: repeating-linear-gradient(45deg, #111, #111 5px, #222 5px, #222 10px);
+        }
+
+        .byte-box.changed {
+            background: #ce9178;
+            color: #000;
+            transform: scale(1.2);
+            z-index: 10;
+        }
+
+        /* 方法区 */
+        .meta-block {
+            border: 1px dashed #dcdcaa;
+            padding: 15px;
+            color: #dcdcaa;
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+            transition: all 0.5s;
+        }
+
+        .meta-block.active {
+            box-shadow: 0 0 10px rgba(220, 220, 170, 0.5);
+        }
+
+        .meta-header {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .meta-section {
+            margin-top: 10px;
+            border-top: 1px solid #555;
+            padding-top: 5px;
+        }
+
+        /* 飞行的地址动画元素 */
+        .flying-addr {
+            position: fixed;
+            background: var(--addr-color);
+            color: #000;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 999;
+            box-shadow: 0 0 10px var(--addr-color);
+        }
+
+        /* 信息提示 */
+        .info-bar {
+            padding: 10px 20px;
+            background: #252526;
+            border-top: 1px solid var(--border);
+            color: #fff;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="toolbar">
+        <h3>JVM 内存可视化引擎 (专业版)</h3>
+        <button class="btn" id="btnPrev" disabled>⏮ 上一步 (撤销)</button>
+        <button class="btn" id="btnNext">下一步 (执行) ⏭</button>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress"></div>
+        </div>
+        <div style="font-size:0.8em; color:#888" id="stepIndicator">0 / 9</div>
+    </div>
+
+    <div class="stage">
+        <div class="panel code-area">
+            <div class="panel-header">源代码 (Source Code)</div>
+            <div class="code-content" id="codeContainer">
+            </div>
+        </div>
+
+        <div class="panel stack-area">
+            <div class="panel-header">栈内存 (Stack)</div>
+            <div id="stackContainer">
+            </div>
+        </div>
+
+        <div class="panel heap-area">
+            <div class="panel-header">
+                <span>堆内存 (Heap) - 实例数据</span>
+                <span style="font-size:0.8em; color:var(--addr-color)" id="heapBaseAddrLabel">起始地址: 0x400010</span>
+            </div>
+            <div class="memory-strip" id="heapContainer">
+            </div>
+        </div>
+
+        <div class="panel method-area">
+            <div class="panel-header">方法区 (Method Area) - 元数据与逻辑</div>
+            <div id="methodContainer" class="mem-content">
+                <div class="meta-block" id="playerMeta">
+                    <div class="meta-header">Player 类结构 (Class Metadata)</div>
+                    <div style="color: #aaa; font-size:0.8rem;">地址: 0xM_PLAYER</div>
+
+                    <div class="meta-section">
+                        <div style="font-weight:bold; color: #fff;">字段信息 (Fields)</div>
+                        <div style="margin-left: 10px;">- id: <span style="color:#4ec9b0">int</span> (4 字节)</div>
+                        <div style="margin-left: 10px;">- level: <span style="color:#4ec9b0">byte</span> (1 字节)</div>
+                        <div style="margin-left: 10px;">- 内存对齐需填充 7 字节</div>
+                    </div>
+
+                    <div class="meta-section">
+                        <div style="font-weight:bold; color: #fff;">方法信息 (Methods)</div>
+                        <div style="margin-left: 10px;">- &lt;init&gt;(): <span style="color:#ce9178">构造器字节码</span>
+                        </div>
+                        <div style="margin-left: 10px;">- get/set 等方法字节码</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-bar" id="infoText">
+        等待开始... 请点击“下一步”观察 JVM 对象的创建过程。
+    </div>
+
+    <script>
+        // ================= 配置与数据定义 =================
+        const HEAP_BASE_ADDR = "0x400010"; // 模拟堆地址
+        const STACK_VAR_ID = "stack_p1_val"; // 栈变量值的DOM ID
+
+        // 源代码
+        const sourceCode = [
+            "<span class='java-kw'>public class</span> Player {",
+            "    <span class='java-type'>int</span> id;      // 4 字节",
+            "    <span class='java-type'>byte</span> level;  // 1 字节",
+            "}",
+            "",
+            "<span class='java-kw'>public static void</span> main(<span class='java-type'>String</span>[] args) {",
+            "    <span class='java-type'>Player</span> p1;",
+            "    p1 = <span class='java-kw'>new</span> Player();",
+            "    p1.id = 1001;",
+            "    p1.level = 5;",
+            "}"
+        ];
+
+        // 内存布局定义 (Offset, Length, Type, Description)
+        const objectLayout = [
+            { off: 0, len: 8, type: 'header', desc: "Mark Word (对象标记)" },
+            { off: 8, len: 4, type: 'header', desc: "Class Pointer (类元数据指针)" },
+            { off: 12, len: 4, type: 'data', desc: "int id (实例属性)" },
+            { off: 16, len: 1, type: 'data', desc: "byte level (实例属性)" },
+            { off: 17, len: 7, type: 'padding', desc: "对齐填充 (Alignment Padding)" } // 补齐到24字节
+        ];
+
+        const SYNTAX_MAP = {
+            'public': 'java-kw', 'class': 'java-kw', 'static': 'java-kw', 'void': 'java-kw', 'new': 'java-kw',
+            'int': 'java-type', 'byte': 'java-type', 'String': 'java-type', 'Player': 'java-type',
+            '1001': 'java-num', '5': 'java-num'
+        };
+
+        // ================= 引擎核心逻辑 =================
+
+        let currentStepIndex = -1;
+
+        // 初始化 DOM
+        function init() {
+            // 1. 渲染代码 (带语法高亮，但无多余颜色值)
+            const codeBox = document.getElementById('codeContainer');
+            sourceCode.forEach((text, i) => {
+                const div = document.createElement('div');
+                div.className = 'line';
+                div.id = `line-${i}`;
+                div.innerHTML = text.replace(/<[^>]*>/g, '').replace(/(\w+)/g, (match, word) => {
+                    const style = SYNTAX_MAP[word];
+                    return style ? `<span class="${style}">${word}</span>` : word;
+                });
+                codeBox.appendChild(div);
+            });
+
+            // 2. 渲染堆内存占位符
+            const heapBox = document.getElementById('heapContainer');
+            objectLayout.forEach(layout => {
+                const row = document.createElement('div');
+                row.className = 'byte-row';
+                row.id = `mem-row-${layout.off}`;
+
+                const addr = document.createElement('div');
+                addr.className = 'addr-col';
+                addr.innerText = `+${layout.off}`;
+                row.appendChild(addr);
+
+                const dataCol = document.createElement('div');
+                dataCol.className = 'data-col';
+                for (let i = 0; i < layout.len; i++) {
+                    const byte = document.createElement('div');
+                    byte.className = `byte-box ${layout.type}`;
+                    byte.id = `byte-${layout.off + i}`;
+                    byte.innerText = '00';
+                    dataCol.appendChild(byte);
+                }
+                row.appendChild(dataCol);
+
+                const desc = document.createElement('div');
+                desc.className = 'desc-col';
+                desc.innerText = layout.desc;
+                row.appendChild(desc);
+
+                heapBox.appendChild(row);
+            });
+
+            // 3. 初始化UI
+            updateUIState();
+        }
+
+        // ================= 动作指令集 (Command Pattern) =================
+
+        const steps = [
+            {
+                // Step 0: 启动 Main
+                desc: "Main 方法启动，JVM 为其分配栈帧 (Stack Frame)。",
+                line: 5,
+                forward: () => {
+                    renderStack(true);
+                },
+                backward: () => {
+                    renderStack(false);
+                }
+            },
+            {
+                // Step 1: 声明变量
+                desc: "在栈帧中分配引用变量 p1，未初始化",
+                line: 6,
+                forward: () => {
+                    renderStack(true, "p1", "null", "#888");
+                },
+                backward: () => {
+                    // 回到 Step 0 的状态
+                    steps[0].forward();
+                }
+            },
+            {
+                // Step 2: 【方法区查找】类加载与分配内存
+                desc: "执行 `new Player()`：JVM 查找方法区，获取 Player 类的结构信息和大小。",
+                line: 7,
+                forward: () => {
+                    document.getElementById('playerMeta').classList.add('active');
+                },
+                backward: () => {
+                    document.getElementById('playerMeta').classList.remove('active');
+                }
+            },
+            {
+                // Step 3: 堆内存分配 (Malloc)
+                desc: "堆内存分配：JVM 在堆中开辟 24 字节连续空间 (包含数据和填充)。",
+                line: 7,
+                forward: () => {
+                    document.querySelectorAll('.byte-row').forEach(row => row.classList.add('allocated'));
+                },
+                backward: () => {
+                    document.querySelectorAll('.byte-row').forEach(row => row.classList.remove('allocated'));
+                }
+            },
+            {
+                // Step 4: 对象头初始化
+                desc: "对象头初始化：写入 Mark Word 和 Class Pointer。Class Pointer (0xM_PLAYER) 指向方法区。",
+                line: 7,
+                forward: () => {
+                    // Mark Word (Fixed pattern for demo)
+                    updateBytes(0, 8, ['01', '00', '00', '00', '00', '00', '00', '00']);
+                    // Class Ptr (Address of Player.class)
+                    updateBytes(8, 4, ['F0', '2A', '00', '20'], true);
+                },
+                backward: () => {
+                    updateBytes(0, 12, Array(12).fill('00'));
+                }
+            },
+            {
+                // Step 5: 实例属性零值初始化
+                desc: "实例属性零值初始化：属性被赋予默认零值 (id=0, level=0)。",
+                line: 7,
+                forward: () => {
+                    // Visual confirmation (flash green)
+                    flashBytes(12, 4, 'rgba(78, 201, 176, 0.3)'); // int
+                    flashBytes(16, 1, 'rgba(78, 201, 176, 0.3)'); // byte
+                },
+                backward: () => {
+                    // 无需操作，00已保留
+                }
+            },
+            {
+                // Step 6: 【关键】地址传递动画
+                desc: "引用赋值：将堆中对象的起始地址 (0x400010) 赋值给栈中的变量 p1。",
+                line: 7,
+                forward: () => {
+                    const heapLabel = document.getElementById('heapBaseAddrLabel');
+                    const stackVal = document.getElementById(STACK_VAR_ID);
+
+                    // 1. 设置最终值
+                    stackVal.innerText = HEAP_BASE_ADDR;
+                    stackVal.style.color = "var(--addr-color)";
+
+                    // 2. 飞行粒子动画
+                    flyAddress(heapLabel, stackVal, HEAP_BASE_ADDR);
+                },
+                backward: () => {
+                    const stackVal = document.getElementById(STACK_VAR_ID);
+                    if (stackVal) {
+                        stackVal.innerText = "null";
+                        stackVal.style.color = "#888";
+                    }
+                }
+            },
+            {
+                // Step 7: 赋值 id
+                desc: "p1.id = 1001：通过引用找到偏移量 +12 (id)，写入 0x000003E9。",
+                line: 8,
+                forward: () => {
+                    // 1001 -> 0x000003E9 (Big Endian for demo visual clarity)
+                    updateBytes(12, 4, ['00', '00', '03', 'E9'], true);
+                },
+                backward: () => {
+                    updateBytes(12, 4, ['00', '00', '00', '00']);
+                }
+            },
+            {
+                // Step 8: 赋值 level
+                desc: "p1.level = 5：通过引用找到偏移量 +16 (level)，写入 0x05。",
+                line: 9,
+                forward: () => {
+                    updateBytes(16, 1, ['05'], true);
+                },
+                backward: () => {
+                    updateBytes(16, 1, ['00']);
+                }
+            }
+        ];
+
+        // ================= 辅助函数 =================
+
+        function renderStack(hasFrame, varName, varValue, varColor) {
+            const stackEl = document.getElementById('stackContainer');
+            if (!hasFrame) {
+                stackEl.innerHTML = '';
+                return;
+            }
+            let html = `
+                <div class="stack-frame">
+                    <div class="frame-label">Main 栈帧</div>
+            `;
+            if (varName) {
+                html += `
+                    <div class="stack-var">
+                        <span class="var-name">${varName}</span>
+                        <span class="var-val" id="${STACK_VAR_ID}" style="color:${varColor || 'var(--addr-color)'}">${varValue}</span>
+                    </div>
+                `;
+            }
+            html += `</div>`;
+            stackEl.innerHTML = html;
+        }
+
+        function updateBytes(startOff, len, values, animate = false) {
+            for (let i = 0; i < len; i++) {
+                const el = document.getElementById(`byte-${startOff + i}`);
+                el.innerText = values[i];
+                if (animate) {
+                    el.classList.add('changed');
+                    setTimeout(() => el.classList.remove('changed'), 500);
+                }
+            }
+        }
+
+        function flashBytes(startOff, len, color) {
+            for (let i = 0; i < len; i++) {
+                const el = document.getElementById(`byte-${startOff + i}`);
+                const originalBg = getComputedStyle(el).backgroundColor;
+                el.style.backgroundColor = color;
+                setTimeout(() => el.style.backgroundColor = '', 400);
+            }
+        }
+
+        function flyAddress(startEl, endEl, address) {
+            const rectStart = startEl.getBoundingClientRect();
+            const rectEnd = endEl.getBoundingClientRect();
+
+            const flyer = document.createElement('div');
+            flyer.className = 'flying-addr';
+            flyer.innerText = address;
+
+            // 初始位置
+            flyer.style.top = rectStart.top + rectStart.height / 2 - 10 + 'px';
+            flyer.style.left = rectStart.left + rectStart.width / 2 - 30 + 'px';
+            document.body.appendChild(flyer);
+
+            // 强制回流
+            flyer.offsetWidth;
+
+            // 最终位置
+            flyer.style.transition = "all 1s cubic-bezier(0.25, 1, 0.5, 1)";
+            flyer.style.top = rectEnd.top + 'px';
+            flyer.style.left = rectEnd.left + 'px';
+
+            setTimeout(() => {
+                flyer.remove();
+            }, 1000);
+        }
+
+        // ================= 流程控制 =================
+
+        const btnNext = document.getElementById('btnNext');
+        const btnPrev = document.getElementById('btnPrev');
+        const infoText = document.getElementById('infoText');
+        const progress = document.getElementById('progress');
+        const stepInd = document.getElementById('stepIndicator');
+
+        function updateHighlight(lineNum) {
+            document.querySelectorAll('.line').forEach(l => l.classList.remove('active'));
+            if (lineNum !== undefined) {
+                document.getElementById(`line-${lineNum}`).classList.add('active');
+            }
+        }
+
+        btnNext.addEventListener('click', () => {
+            if (currentStepIndex < steps.length - 1) {
+                currentStepIndex++;
+                const step = steps[currentStepIndex];
+
+                step.forward();
+                updateHighlight(step.line);
+                infoText.innerText = `步骤 ${currentStepIndex}: ${step.desc}`;
+
+                updateUIState();
+            }
+        });
+
+        btnPrev.addEventListener('click', () => {
+            if (currentStepIndex >= 0) {
+                const step = steps[currentStepIndex];
+                step.backward();
+                currentStepIndex--;
+
+                // 恢复上一步的高亮和文本
+                if (currentStepIndex >= 0) {
+                    const prevStep = steps[currentStepIndex];
+                    updateHighlight(prevStep.line);
+                    infoText.innerText = `步骤 ${currentStepIndex}: ${prevStep.desc}`;
+                } else {
+                    updateHighlight(undefined);
+                    infoText.innerText = "准备就绪";
+                }
+
+                updateUIState();
+            }
+        });
+
+        function updateUIState() {
+            btnPrev.disabled = currentStepIndex < 0;
+            btnNext.disabled = currentStepIndex >= steps.length - 1;
+
+            const pct = ((currentStepIndex + 1) / steps.length) * 100;
+            progress.style.width = `${pct}%`;
+            stepInd.innerText = `${currentStepIndex + 1} / ${steps.length}`;
+
+            // 方法区高亮逻辑
+            const isMethodActive = currentStepIndex >= 2 && currentStepIndex <= 5;
+            document.getElementById('playerMeta').classList.toggle('active', isMethodActive);
+        }
+
+        // 启动
+        init();
+
+    </script>
+</body>
+
+</html>

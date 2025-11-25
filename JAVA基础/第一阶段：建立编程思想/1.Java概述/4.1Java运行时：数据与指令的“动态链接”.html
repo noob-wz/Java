@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>JVM 运行时数据区可视化：指令与常量池的交互</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --card-bg: #2d2d2d;
+            --highlight: #4caf50;
+            --accent: #2196f3;
+            --warn: #ff9800;
+            --text: #e0e0e0;
+            --border: #444;
+        }
+
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background-color: var(--bg-color);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        h2,
+        h3 {
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+
+        .container {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 1200px;
+            gap: 20px;
+            position: relative;
+        }
+
+        /* 区域容器 */
+        .zone {
+            background: var(--card-bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            flex: 1;
+            min-height: 400px;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .zone-header {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 磁盘上的 .class 结构 */
+        .byte-row {
+            display: flex;
+            border-bottom: 1px dashed #444;
+            padding: 5px 0;
+            font-size: 0.9em;
+        }
+
+        .byte-idx {
+            color: #888;
+            width: 40px;
+        }
+
+        .byte-hex {
+            color: var(--accent);
+            width: 120px;
+        }
+
+        .byte-desc {
+            color: var(--warn);
+        }
+
+        /* 内存中的结构 */
+        .memory-block {
+            margin-top: 10px;
+        }
+
+        .pool-item,
+        .code-line {
+            padding: 8px;
+            margin: 4px 0;
+            background: #333;
+            border-radius: 4px;
+            cursor: default;
+            transition: background 0.3s, transform 0.2s;
+            border: 1px solid transparent;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .pool-index {
+            color: var(--accent);
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .pool-val {
+            color: #ddd;
+        }
+
+        .pool-resolved {
+            color: #888;
+            font-size: 0.8em;
+            font-style: italic;
+            display: none;
+        }
+
+        .code-line.active {
+            background: #3e503e;
+            border-color: var(--highlight);
+            transform: scale(1.02);
+        }
+
+        .pool-item.accessed {
+            background: #3e4550;
+            border-color: var(--accent);
+        }
+
+        .pool-item.resolved-state .pool-resolved {
+            display: inline;
+            color: var(--highlight);
+        }
+
+        /* 动画控制 */
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            font-family: inherit;
+        }
+
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        button.reset {
+            background: var(--warn);
+        }
+
+        /* 连线动画层 */
+        #canvas-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .status-bar {
+            width: 100%;
+            max-width: 1200px;
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-left: 5px solid var(--highlight);
+        }
+
+        .blink {
+            animation: blinker 1s linear infinite;
+        }
+
+        @keyframes blinker {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        /* 栈帧可视化 */
+        .stack-frame {
+            border: 1px dashed var(--border);
+            padding: 10px;
+            margin-top: 10px;
+            min-height: 50px;
+            display: flex;
+            flex-direction: column-reverse;
+            /* 栈底在下 */
+            gap: 5px;
+        }
+
+        .stack-slot {
+            background: var(--highlight);
+            color: #000;
+            padding: 5px;
+            text-align: center;
+            border-radius: 3px;
+            font-weight: bold;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Java 运行时：数据与指令的“动态链接”之旅</h1>
+    <p style="color:#aaa; max-width: 800px; text-align: center;">
+        观察 .class 文件如何加载到方法区，以及指令（Instructions）如何通过索引（Index）找到并解析常量池（Constant Pool）中的数据。
+    </p>
+
+    <div class="controls">
+        <button id="btn-load" onclick="loadClass()">1. 类加载 (Load Class)</button>
+        <button id="btn-step" onclick="nextStep()" disabled>2. 单步执行 (Step)</button>
+        <button class="reset" onclick="resetDemo()">重置 (Reset)</button>
+    </div>
+
+    <div class="container">
+        <div class="zone" id="disk-zone" style="flex: 0.8;">
+            <div class="zone-header">
+                <span>💿 Disk (HelloWorld.class)</span>
+            </div>
+            <div style="opacity: 0.7;">
+                <small>Binary Structure</small>
+                <div class="byte-row"><span class="byte-idx">00</span><span class="byte-hex">CA FE BA BE</span><span
+                        class="byte-desc">Magic</span></div>
+                <div class="byte-row"><span class="byte-idx">08</span><span class="byte-hex">00 05</span><span
+                        class="byte-desc">ConstPoolCount</span></div>
+                <div class="byte-row" style="border-color: var(--accent);"><span class="byte-idx">#1</span><span
+                        class="byte-hex">Utf8</span><span class="byte-desc">"Hello Java"</span></div>
+                <div class="byte-row" style="border-color: var(--accent);"><span class="byte-idx">#2</span><span
+                        class="byte-hex">String</span><span class="byte-desc">Ref to #1</span></div>
+                <div class="byte-row" style="border-color: var(--warn);"><span class="byte-idx">Code</span><span
+                        class="byte-hex">12 02 ...</span><span class="byte-desc">ldc #2</span></div>
+            </div>
+        </div>
+
+        <canvas id="canvas-layer"></canvas>
+
+        <div class="zone" id="memory-zone" style="opacity: 0.5; transform: scale(0.98);">
+            <div class="zone-header">
+                <span>🧠 Method Area (Metaspace)</span>
+                <span style="font-size:0.8em; color:#aaa;">Class: HelloWorld</span>
+            </div>
+
+            <div class="memory-block">
+                <h3 style="font-size: 1em; border-bottom: 1px solid #444;">Runtime Constant Pool</h3>
+                <div id="rt-pool">
+                </div>
+            </div>
+
+            <div class="memory-block" style="margin-top: 20px;">
+                <h3 style="font-size: 1em; border-bottom: 1px solid #444;">Method Code (Instructions)</h3>
+                <div id="code-cache">
+                </div>
+            </div>
+        </div>
+
+        <div class="zone" style="flex: 0.6;">
+            <div class="zone-header">
+                <span>⚡ Java Thread Stack</span>
+            </div>
+            <small>Operand Stack (操作数栈)</small>
+            <div class="stack-frame" id="operand-stack">
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span style="color: #888;">状态：</span>
+        <span id="status-text" style="color: var(--text); font-weight: bold;">等待加载类文件...</span>
+    </div>
+
+    <script>
+        // 模拟数据
+        const constantPoolData = [
+            { id: 1, type: "Utf8", val: "Hello Java" },
+            { id: 2, type: "String", val: "#1", resolvedVal: "MemoryAddr(@0xF1)", realVal: "Hello Java" },
+            { id: 3, type: "FieldRef", val: "System.out", resolvedVal: "Addr(@0xA0)" }
+        ];
+
+        const instructions = [
+            { pc: 0, code: "getstatic", operand: "#3", desc: "获取 System.out" },
+            { pc: 3, code: "ldc", operand: "#2", desc: "从常量池加载字符串" },
+            { pc: 5, code: "invokevirtual", operand: "...", desc: "执行 println" },
+            { pc: 8, code: "return", operand: "", desc: "方法返回" }
+        ];
+
+        let currentStep = 0;
+        let isLoaded = false;
+        const canvas = document.getElementById('canvas-layer');
+        const ctx = canvas.getContext('2d');
+
+        // 初始化 Canvas 尺寸
+        function resizeCanvas() {
+            canvas.width = document.querySelector('.container').offsetWidth;
+            canvas.height = document.querySelector('.container').offsetHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function log(msg) {
+            const el = document.getElementById('status-text');
+            el.innerText = msg;
+            el.classList.remove('blink');
+            void el.offsetWidth; // trigger reflow
+            el.classList.add('blink');
+        }
+
+        function drawArrow(fromElem, toElem, color = '#2196f3') {
+            if (!fromElem || !toElem) return;
+            const rect1 = fromElem.getBoundingClientRect();
+            const rect2 = toElem.getBoundingClientRect();
+            const containerRect = document.querySelector('.container').getBoundingClientRect();
+
+            const x1 = rect1.right - containerRect.left;
+            const y1 = rect1.top + (rect1.height / 2) - containerRect.top;
+            const x2 = rect2.left - containerRect.left;
+            const y2 = rect2.top + (rect2.height / 2) - containerRect.top;
+
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            // 贝塞尔曲线连接
+            ctx.bezierCurveTo(x1 + 50, y1, x2 - 50, y2, x2, y2);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // 箭头头部
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - 10, y2 - 5);
+            ctx.lineTo(x2 - 10, y2 + 5);
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function loadClass() {
+            if (isLoaded) return;
+
+            // 1. 视觉效果：激活右侧
+            const memZone = document.getElementById('memory-zone');
+            memZone.style.opacity = '1';
+            memZone.style.transform = 'scale(1)';
+
+            log("ClassLoader 正在加载类... 将静态结构映射到运行时元空间 (Metaspace)");
+
+            // 2. 填充常量池
+            const poolContainer = document.getElementById('rt-pool');
+            let poolHtml = '';
+            constantPoolData.forEach(item => {
+                poolHtml += `<div class="pool-item" id="pool-${item.id}">
+                <span class="pool-index">#${item.id}</span>
+                <span>${item.type}</span>
+                <span class="pool-val">${item.val}</span>
+                <span class="pool-resolved"> -> ${item.resolvedVal}</span>
+            </div>`;
+            });
+            poolContainer.innerHTML = poolHtml;
+
+            // 3. 填充代码缓存
+            const codeContainer = document.getElementById('code-cache');
+            let codeHtml = '';
+            instructions.forEach((inst, idx) => {
+                codeHtml += `<div class="code-line" id="code-${idx}">
+                <span style="color:#888; width:30px;">${inst.pc}</span>
+                <span style="color:#a6e22e; font-weight:bold; width:120px;">${inst.code}</span>
+                <span style="color:var(--warn);">${inst.operand}</span>
+                <span style="color:#666; font-size:0.8em; margin-left:auto;">// ${inst.desc}</span>
+            </div>`;
+            });
+            codeContainer.innerHTML = codeHtml;
+
+            // 动画连线：模拟加载过程
+            setTimeout(() => {
+                drawArrow(document.getElementById('disk-zone'), document.getElementById('memory-zone'), '#4caf50');
+                log("加载完成！类信息现已存在于方法区。注意常量池目前是'符号引用'状态。");
+                isLoaded = true;
+                document.getElementById('btn-load').disabled = true;
+                document.getElementById('btn-step').disabled = false;
+            }, 500);
+        }
+
+        function nextStep() {
+            clearCanvas();
+            // 重置高亮
+            document.querySelectorAll('.code-line').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.pool-item').forEach(el => el.classList.remove('accessed'));
+
+            const codeEl = document.getElementById(`code-${currentStep}`);
+            if (!codeEl) {
+                log("程序执行结束。");
+                return;
+            }
+
+            codeEl.classList.add('active');
+            const inst = instructions[currentStep];
+
+            // 逻辑分支
+            if (inst.code === 'getstatic') {
+                log(`[PC: ${inst.pc}] getstatic #3: 索引指向常量池 #3`);
+                const poolEl = document.getElementById('pool-3');
+
+                setTimeout(() => {
+                    drawArrow(codeEl, poolEl, '#ff9800');
+                    poolEl.classList.add('accessed');
+                    poolEl.classList.add('resolved-state'); // 模拟解析
+                    log(">> 动态链接：符号引用 #3 被解析为直接地址 (0xA0)，静态对象被推入堆栈");
+                    pushStack("System.out");
+                }, 500);
+            }
+            else if (inst.code === 'ldc') {
+                log(`[PC: ${inst.pc}] ldc #2: 索引指向常量池 #2`);
+                const poolEl = document.getElementById('pool-2');
+
+                setTimeout(() => {
+                    drawArrow(codeEl, poolEl, '#ff9800');
+                    poolEl.classList.add('accessed');
+                    poolEl.classList.add('resolved-state');
+                    log(">> 动态链接：String #2 被解析为堆内存地址 (0xF1)，引用入栈");
+                    pushStack(`"Hello Java"`);
+                }, 500);
+            }
+            else if (inst.code === 'invokevirtual') {
+                log(`[PC: ${inst.pc}] invokevirtual: 使用栈顶数据执行方法...`);
+                setTimeout(() => {
+                    popStack(); // 弹 string
+                    popStack(); // 弹 object
+                    log(">> 控制台输出: Hello Java");
+                    alert("控制台输出: Hello Java");
+                }, 800);
+            }
+
+            currentStep++;
+            if (currentStep >= instructions.length) {
+                document.getElementById('btn-step').disabled = true;
+                document.getElementById('btn-step').innerText = "执行完毕";
+            }
+        }
+
+        function pushStack(val) {
+            const stack = document.getElementById('operand-stack');
+            const slot = document.createElement('div');
+            slot.className = 'stack-slot';
+            slot.innerText = val;
+            stack.appendChild(slot);
+        }
+
+        function popStack() {
+            const stack = document.getElementById('operand-stack');
+            if (stack.lastChild) {
+                stack.removeChild(stack.lastChild);
+            }
+        }
+
+        function resetDemo() {
+            location.reload();
+        }
+    </script>
+
+</body>
+
+</html>
