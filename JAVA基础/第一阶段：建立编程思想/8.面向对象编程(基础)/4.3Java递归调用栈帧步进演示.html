@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Java递归步进可视化演示</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f4f7f6;
+        }
+
+        h3 {
+            color: #007acc;
+        }
+
+        .code-explanation {
+            width: 80%;
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            background-color: #ffffff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .code-explanation pre {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        #stack-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border-left: 5px solid #007acc;
+            padding-left: 20px;
+            min-height: 400px;
+        }
+
+        .stack-frame {
+            width: 250px;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #333;
+            background-color: #e0f7fa;
+            border-radius: 5px;
+            text-align: center;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+            transition: all 0.5s ease-in-out;
+        }
+
+        .pushing {
+            background-color: #a5d6a7;
+            transform: scale(1.05);
+        }
+
+        .popping {
+            background-color: #ffccbc;
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+
+        .current-action {
+            margin-top: 15px;
+            font-weight: bold;
+            color: #d32f2f;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007acc;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+
+        .disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        #resetBtn {
+            background-color: #f44336;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h3>&#x2699; Java递归调用栈帧步进演示 (test(10))</h3>
+
+    <div class="code-explanation">
+        <h4>当前执行逻辑 (被阻塞的打印语句体现后进先出):</h4>
+        <pre>
+public static void test(int n) {
+    if (n > 2) {
+        test(n-1); // <--- 关键：当前方法暂停，新的栈帧压入
+    }
+    // 只有栈帧出栈时，这行代码才能执行
+    System.out.println("n=" + n); 
+} 
+        </pre>
+        <div class="current-action" id="action-display">点击 开始/重置 按钮进行初始化</div>
+    </div>
+
+    <div class="controls">
+        <button id="startBtn" onclick="initDemo()">开始/重置</button>
+        <button id="stepBtn" onclick="stepDemo()" class="disabled">下一步</button>
+    </div>
+
+    <h4>JVM 调用栈 (Stack)</h4>
+    <div id="stack-container">
+    </div>
+
+    <script>
+        const stackContainer = document.getElementById('stack-container');
+        const actionDisplay = document.getElementById('action-display');
+        const startBtn = document.getElementById('startBtn');
+        const stepBtn = document.getElementById('stepBtn');
+        const MAX_N = 10;
+
+        // --- 全局状态控制对象 ---
+        let control = {
+            step: 0, // 0: 初始化, 1-9: 压栈, 10-18: 出栈
+            state: 'IDLE', // IDLE, PUSHING, POPPING, DONE
+            stack: [],
+        };
+
+        // --- 核心 Promise/Resolve 机制实现步进 ---
+        let resolver = null;
+        function stepDemo() {
+            if (resolver) {
+                resolver(); // 唤醒等待的 async 函数
+                resolver = null;
+            }
+        }
+        function waitForStep() {
+            return new Promise(resolve => {
+                resolver = resolve;
+            });
+        }
+
+        // --- 动画/DOM 操作 ---
+        function updateUI(message) {
+            actionDisplay.innerHTML = `<strong>[步骤 ${control.step}]</strong> ${message}`;
+        }
+        function enableControls(enableStep) {
+            stepBtn.classList.toggle('disabled', !enableStep);
+            startBtn.textContent = '重置';
+        }
+
+        // --- 递归过程模拟 ---
+
+        async function pushFrame(n) {
+            control.step++;
+            updateUI(`压栈： 调用 test(${n})。当前栈帧暂停，等待 test(${n - 1}) 返回。`);
+
+            await waitForStep(); // 等待用户点击下一步
+
+            const frame = document.createElement('div');
+            frame.className = 'stack-frame pushing';
+            frame.id = `frame-${n}`;
+            frame.innerHTML = `<strong>栈帧 ${n}</strong><br>局部变量 n = ${n}`;
+
+            // 顶部压栈 (后进)
+            stackContainer.prepend(frame);
+            control.stack.push(frame);
+
+            setTimeout(() => frame.classList.remove('pushing'), 300);
+        }
+
+        async function popFrame(n) {
+            control.step++;
+
+            const frameToPop = control.stack.pop();
+            if (frameToPop) {
+
+                // 打印语句执行
+                updateUI(`出栈： 栈帧 ${n} 继续执行 println("n=${n}")，栈帧销毁。`);
+
+                await waitForStep(); // 等待用户点击下一步
+
+                // 销毁动画
+                frameToPop.classList.add('popping');
+                setTimeout(() => frameToPop.remove(), 700);
+            }
+        }
+
+        // --- 驱动函数 ---
+
+        async function runDemo() {
+            enableControls(true);
+
+            // 阶段一：压栈 (n=10 到 n=3)
+            control.state = 'PUSHING';
+            for (let n = MAX_N; n > 2; n--) {
+                await pushFrame(n);
+            }
+
+            // 压入 n=2 的栈帧（递归终止）
+            await pushFrame(2);
+            updateUI(`🚀 递归终止： test(2) 栈帧压入。n=2 不满足 (n > 2) 条件，跳过递归调用，准备执行 println。`);
+
+            await waitForStep(); // 观察 n=2 栈帧
+
+            // 阶段二：出栈 (n=2 到 n=10)
+            control.state = 'POPPING';
+            // 从 n=2 开始出栈 (栈顶)
+            for (let n = 2; n <= MAX_N; n++) {
+                await popFrame(n);
+            }
+
+            // 结束
+            control.state = 'DONE';
+            updateUI("🎉 演示结束。所有栈帧已销毁。结果是 2 到 10 依次打印。");
+            enableControls(false);
+            startBtn.classList.remove('disabled');
+        }
+
+        // 初始化/重置函数
+        function initDemo() {
+            // 重置 DOM
+            stackContainer.innerHTML = '';
+
+            // 重置状态
+            control = {
+                step: 0,
+                state: 'INIT',
+                stack: [],
+            };
+
+            // 确保按钮可用
+            enableControls(false);
+            startBtn.textContent = '开始演示';
+            startBtn.classList.add('disabled');
+
+            // 启动演示流程
+            runDemo();
+        }
+
+    </script>
+</body>
+
+</html>
