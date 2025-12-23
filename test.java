@@ -1,20 +1,26 @@
 public class test {
-
-    
     public static void main(String[] args) {
-        T t = new T();
-        Person p = new Person();
-        t.test2(p);
+        Circle circle = new Circle();
+        PassObject obj = new PassObject();
+        obj.printAreas(circle, 5);
     }
 }
 
-class Person {
-    String name = "wangzeng";
+class Circle {
+    double radius;
+
+    public double findArea() {
+        return Math.PI * radius * radius;
+    }
 }
 
-class T {
-    public void test2(Person p) {
-        System.out.println(p.name);
+class PassObject {
+    public void printAreas(Circle c, int times) {
+        System.out.println("Radius\t\t" + "Area");
+        for (int i = 1; i <= times; i++) {
+            c.radius = (double)i;
+            System.out.println(c.radius + "\t\t\t" + c.findArea());
+        }
     }
 }
 
