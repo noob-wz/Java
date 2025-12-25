@@ -3,7 +3,7 @@
 
 public class VarParameter02 {
     public static void main(String[] args) {
-        HspMethod hsp = new HspMethod();
+        HspMethod2 hsp = new HspMethod2();
 
         // 错误写法！编译器会报错，因为它无法判断  {20, 30, 80, 110, 70} 到底是什么类型（是 int[] 还是 double[] 还是其他）。这种 {...} 简写形式，只有在 定义数组变量时 或 创建匿名数组时 才能使用。
         // hsp.showScore("汪曾", {20, 30, 80, 110, 70});
@@ -20,7 +20,7 @@ public class VarParameter02 {
     }
 }
 
-class HspMethod {
+class HspMethod2 {
     public String showScore(String name, int... scores) {
         int sum = 0;
         for(int i = 0; i < scores.length; i++) {

@@ -1,0 +1,172 @@
+/* ====================================================
+   Style: Clean Air Ultra (Mac-Style & Interactive)
+   核心：macOS 窗口风格代码块、仿真键盘按键、优雅交互
+   ==================================================== */
+
+/* 1. 全局渲染与选中文本 */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "MiSans", "PingFang SC", "Microsoft YaHei", sans-serif !important;
+    font-size: 15px !important;
+    line-height: 1.8 !important;
+    color: #353535 !important;
+    background-color: #ffffff !important;
+    padding: 40px !important;
+    max-width: 880px;
+    margin: 0 auto;
+
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* 【Pro 细节】自定义鼠标选中文本的颜色 */
+::selection {
+    background: #ffe3cd; /* 极淡的小米橙 */
+    color: #333;
+}
+
+/* 2. 标题系统：紧致有力 */
+h1, h2, h3, h4, h5, h6 {
+    color: #000000 !important;
+    font-weight: 600 !important;
+    line-height: 1.3 !important;
+    letter-spacing: -0.02em !important;
+}
+h1 { font-size: 2.2em !important; margin: 2.5em 0 1.2em; }
+h2 {
+    font-size: 1.75em !important;
+    margin: 2.2em 0 0.8em;
+    border-left: 4px solid #000;
+    padding-left: 16px;
+}
+h3 { font-size: 1.35em !important; margin-top: 1.8em; color: #333 !important; }
+
+/* 3. 代码系统：Mac 终端风格 (本次升级核心) */
+code, pre {
+    font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace !important;
+}
+
+/* 行内代码：保持你喜欢的高亮风格 */
+code {
+    font-size: 0.95em !important;
+    background-color: #f3f4f6 !important;
+    color: #c7254e !important;
+    padding: 2px 5px !important;
+    border-radius: 4px;
+    margin: 0 3px;
+}
+
+/* 多行代码块：模拟 macOS 窗口 */
+pre {
+    background-color: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px; /* 大圆角 */
+    padding: 40px 20px 20px 20px !important; /* 【关键】上方 padding 加大，为了放红黄绿圆点 */
+    margin: 1.8em 0;
+    line-height: 1.6 !important;
+    font-size: 13.5px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03); /* 悬浮阴影 */
+    position: relative; /* 为了定位圆点 */
+    overflow: hidden; /* 防止内容溢出 */
+}
+
+/* 【纯 CSS 魔法】绘制红黄绿三个圆点 */
+pre::before {
+    content: " ";
+    position: absolute;
+    top: 12px;
+    left: 15px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ff5f56; /* 红点 */
+    box-shadow: 20px 0 0 #ffbd2e, 40px 0 0 #27c93f; /* 利用阴影绘制黄点和绿点 */
+    z-index: 2;
+}
+
+/* 【纯 CSS 魔法】绘制顶部一条淡灰色的 Header 条 */
+pre::after {
+    content: " ";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 34px;
+    background: #f1f5f9; /* 顶部条背景色 */
+    border-bottom: 1px solid #e2e8f0;
+    z-index: 1;
+}
+
+pre code {
+    background-color: transparent !important;
+    color: #334155 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: inherit !important;
+    position: relative;
+    z-index: 3; /* 内容要在 Header 条之上 */
+}
+
+/* 4. 键盘按键样式 (KBD Tag) - 记录快捷键神器 */
+kbd {
+    display: inline-block;
+    padding: 3px 6px;
+    font-family: "JetBrains Mono", sans-serif;
+    font-size: 12px;
+    line-height: 10px;
+    color: #444d56;
+    vertical-align: middle;
+    background-color: #fafbfc;
+    border: 1px solid #c6cbd1;
+    border-bottom-color: #959da5; /* 底部边框深一点，模拟厚度 */
+    border-radius: 3px;
+    box-shadow: inset 0 -1px 0 #959da5; /* 3D按压感 */
+    margin: 0 2px;
+}
+
+/* 5. 其他细节 */
+strong, b { color: #000000 !important; font-weight: 700 !important; }
+
+/* 引用块 */
+blockquote {
+    background-color: #f9fafb !important;
+    border-left: 4px solid #e5e7eb !important; /* 恢复一条极淡的竖线，增加识别度 */
+    border-radius: 0 8px 8px 0;
+    padding: 16px 24px !important;
+    margin: 1.6em 0 !important;
+    color: #64748b !important;
+}
+
+/* 列表 */
+ul, ol { padding-left: 1.8em; margin-bottom: 1.6em; }
+li { margin-bottom: 0.5em; color: #374151; }
+
+/* 链接：带动画 */
+a {
+    color: #0284c7;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: all 0.2s ease;
+}
+a:hover {
+    background-color: rgba(2, 132, 199, 0.08); /* 悬停时加个极淡的背景 */
+    border-bottom-color: #0284c7;
+    border-radius: 2px;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* 表格 */
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 2em 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    overflow: hidden; /* 让圆角生效 */
+}
+th, td { border: 1px solid #e5e7eb; padding: 10px 14px; }
+th { background-color: #f8fafc !important; font-weight: 600; color: #1e293b; }
+tr { background: none !important; }

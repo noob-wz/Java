@@ -68,7 +68,6 @@ Hero h = new Warrior();
 
 ```java
 h.move(); // ??? 猜猜是谁？
-
 ```
 
 **答案是：**

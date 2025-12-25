@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/1.Java概述/1.Java概述.iml" filepath="$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/1.Java概述/1.Java概述.iml" />
+      <module fileurl="file://$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/2.变量/2.变量.iml" filepath="$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/2.变量/2.变量.iml" />
+      <module fileurl="file://$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/3.运算符/3.运算符.iml" filepath="$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/3.运算符/3.运算符.iml" />
+      <module fileurl="file://$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/5.键盘输入/5.键盘输入.iml" filepath="$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/5.键盘输入/5.键盘输入.iml" />
+      <module fileurl="file://$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/6.控制结构/6.控制结构.iml" filepath="$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/6.控制结构/6.控制结构.iml" />
+      <module fileurl="file://$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/7.数组/7.数组.iml" filepath="$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/7.数组/7.数组.iml" />
+      <module fileurl="file://$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/8.面向对象编程/8.面向对象编程.iml" filepath="$PROJECT_DIR$/JAVA基础/第一阶段：建立编程思想/8.面向对象编程/8.面向对象编程.iml" />
+    </modules>
+  </component>
+</project>

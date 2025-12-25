@@ -1,10 +1,9 @@
 // 目的：梳理对象创建的流程（本质就是new的工作原理）
 //  如：分析 Person p = new Person("wangzeng", 27); 这行代码的执行过程。
 
-
 public class HomeWork01 {
     public static void main(String[] args) {
-        Person p = new Person("wangzeng", 27);
+        Person1 p = new Person1("wangzeng", 27);
         // 创建一个实例（new)一般有六个步骤:
         // 第一步：检查加载类，JVM会在方法区查看是否存在这个类
         //          a. 存在，获取Person类的结构信息和大小
@@ -18,15 +17,15 @@ public class HomeWork01 {
         //          c. 执行构造器主体部分：将常量池中"wangzeng"的起始地址给堆中对象的name属性，方法区中age的值拷贝给对象的age
         // 第六步：建立栈引用。将创建的对象的起始地址赋给引用变量p
 
-        System.out.println(p.name + "" + p.age);
+        System.out.println(p.name + " " + p.age);
     }
 }
 
-class Person {
+class Person1 {
     int age = 90;
     String name;
 
-    Person(String name, int age) {
+    public Person1(String name, int age) {
         this.name = name;
         this.age = age;
     }

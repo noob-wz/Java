@@ -26,13 +26,13 @@ class Circle {
     }
 }
 
-class PassObject{
+class PassObject {
     // 选择在对象中传出对象引用，而不是直接创造一个新的对象，符合单一职责原则
     // 单一职责原则：工具类不生产数据，只负责业务逻辑
     public void printAreas(Circle circle, int times) {
         System.out.println("Radius\t\tArea");
         for (int i = 1; i <= times; i++) {
-            circle.radius = (double)i;
+            circle.radius = (double) i;
             System.out.println(circle.radius + "\t\t\t" + circle.areas());
         }
     }

@@ -1,16 +1,16 @@
 public class Method01 {
     public static void main(String[] args) {
-        Person person1 = new Person();
-        System.out.println("person1的年龄：" + person1.age);
-        System.out.println("person1的姓名：" + person1.name);
-        person1.speak();
-        System.out.println(person1.cal01());
-        System.out.println(person1.cal02(10000));
-        System.out.println(person1.getSum(5, 5));
+        Person3 person3 = new Person3();
+        System.out.println("person1的年龄：" + person3.age);
+        System.out.println("person1的姓名：" + person3.name);
+        person3.speak();
+        System.out.println(person3.cal01());
+        System.out.println(person3.cal02(10000));
+        System.out.println(person3.getSum(5, 5));
     }
 }
 
-class Person {
+class Person3 {
     int age;
     String name;
 
