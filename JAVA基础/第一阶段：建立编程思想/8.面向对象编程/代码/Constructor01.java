@@ -15,7 +15,8 @@ class Person2 {
 
     // 无参构造器
     public Person2() {
-        this.name = null; // 等价于 name = null; 因为编译器默认会给name编译成this
+        // 等价于 name = null; 因为编译器默认会给name编译成this
+        this.name = null;
         this.age = 18;
     }
 
