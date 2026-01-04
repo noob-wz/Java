@@ -1,0 +1,3198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JVM方法调用全过程 - Java初学者友好版</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: #818cf8;
+            --primary-dark: #4f46e5;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --danger: #ef4444;
+            --compile: #8b5cf6;
+            --classload: #06b6d4;
+            --runtime: #ec4899;
+            --bg-dark: #1e1e2e;
+            --bg-card: #ffffff;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --border: #e5e7eb;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        /* ===== 头部区域 ===== */
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .header h1 {
+            font-size: 2.2em;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--runtime));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+        }
+
+        .header-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1em;
+        }
+
+        .code-example {
+            display: inline-block;
+            background: var(--bg-dark);
+            color: #f8f8f2;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95em;
+            margin-top: 12px;
+        }
+
+        .code-example .type { color: #66d9ef; }
+        .code-example .keyword { color: #ff79c6; }
+        .code-example .method { color: #50fa7b; }
+        .code-example .number { color: #bd93f9; }
+
+        /* ===== 学习目标卡片 ===== */
+        .learning-goals {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border: 2px solid #f59e0b;
+            border-radius: 16px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+        }
+
+        .learning-goals h3 {
+            color: #92400e;
+            font-size: 1.1em;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .goals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+        }
+
+        .goal-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            background: rgba(255,255,255,0.7);
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .goal-icon {
+            width: 24px;
+            height: 24px;
+            background: #f59e0b;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8em;
+            flex-shrink: 0;
+        }
+
+        .goal-text {
+            color: #78350f;
+            font-size: 0.95em;
+        }
+
+        /* ===== 时间线 ===== */
+        .timeline-section {
+            margin: 24px 0;
+        }
+
+        .timeline {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            padding: 0 60px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 28px;
+            left: 60px;
+            right: 60px;
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+        }
+
+        .timeline-progress {
+            position: absolute;
+            top: 28px;
+            left: 60px;
+            height: 6px;
+            background: linear-gradient(90deg, var(--compile), var(--classload), var(--runtime));
+            border-radius: 3px;
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+
+        .timeline-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+            flex: 1;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .timeline-item:hover {
+            transform: translateY(-3px);
+        }
+
+        .timeline-dot {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: #e5e7eb;
+            border: 4px solid white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2em;
+            color: white;
+            transition: all 0.4s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .timeline-item[data-stage="0"] .timeline-dot.active { background: var(--compile); }
+        .timeline-item[data-stage="1"] .timeline-dot.active { background: var(--classload); }
+        .timeline-item[data-stage="2"] .timeline-dot.active { background: var(--runtime); }
+
+        .timeline-dot.completed {
+            background: var(--secondary) !important;
+        }
+
+        .timeline-dot.active {
+            transform: scale(1.15);
+            box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.2);
+        }
+
+        .timeline-label {
+            margin-top: 16px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-label-main {
+            font-weight: 700;
+            font-size: 1em;
+            color: var(--text-secondary);
+        }
+
+        .timeline-label-sub {
+            font-size: 0.85em;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+
+        .timeline-item.active .timeline-label-main {
+            color: var(--primary);
+        }
+
+        /* ===== 进度指示器 ===== */
+        .progress-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin: 20px 0;
+            padding: 16px;
+            background: #f9fafb;
+            border-radius: 12px;
+        }
+
+        .step-counter {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .step-counter span {
+            color: var(--primary);
+            font-size: 1.3em;
+        }
+
+        .progress-bar {
+            flex: 1;
+            max-width: 400px;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--compile), var(--classload), var(--runtime));
+            border-radius: 4px;
+            transition: width 0.4s ease;
+        }
+
+        /* ===== 控制按钮 ===== */
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            font-size: 0.95em;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: var(--text-primary);
+            border: 2px solid #e5e7eb;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #e5e7eb;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-icon {
+            font-size: 1.1em;
+        }
+
+        .keyboard-hint {
+            font-size: 0.75em;
+            background: rgba(0,0,0,0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 4px;
+        }
+
+        /* ===== 主内容区 ===== */
+        .stage-content {
+            min-height: 600px;
+            position: relative;
+            margin-top: 24px;
+        }
+
+        .stage-panel {
+            display: none;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .stage-panel.active {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* ===== 阶段零：前置知识 ===== */
+        .intro-stage {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .concept-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+            border-left: 5px solid var(--primary);
+        }
+
+        .concept-card h3 {
+            color: var(--primary);
+            font-size: 1.3em;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .concept-content {
+            color: var(--text-primary);
+            line-height: 1.8;
+        }
+
+        .analogy-box {
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+            border: 2px solid #10b981;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin: 16px 0;
+        }
+
+        .analogy-box h4 {
+            color: #065f46;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .analogy-box p {
+            color: #047857;
+        }
+
+        .key-terms {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .term-badge {
+            background: #f3f4f6;
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: help;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .term-badge:hover {
+            border-color: var(--primary);
+            background: #eef2ff;
+        }
+
+        .term-badge strong {
+            color: var(--primary);
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .term-badge span {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
+
+        /* ===== 阶段一：编译期 ===== */
+        .compile-stage {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 3px solid;
+        }
+
+        .panel-header.compile { border-color: var(--compile); }
+        .panel-header.classload { border-color: var(--classload); }
+        .panel-header.runtime { border-color: var(--runtime); }
+
+        .panel-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3em;
+        }
+
+        .panel-icon.compile { background: rgba(139, 92, 246, 0.15); }
+        .panel-icon.classload { background: rgba(6, 182, 212, 0.15); }
+        .panel-icon.runtime { background: rgba(236, 72, 153, 0.15); }
+
+        .panel-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* 代码显示 */
+        .code-display {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+            line-height: 1.8;
+            overflow-x: auto;
+        }
+
+        .code-line {
+            padding: 4px 12px;
+            margin: 2px 0;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            white-space: pre;
+        }
+
+        .code-line.highlight {
+            background: rgba(139, 92, 246, 0.3);
+            border-left: 4px solid var(--compile);
+            transform: translateX(4px);
+        }
+
+        .code-line.focus {
+            background: rgba(16, 185, 129, 0.3);
+            border-left: 4px solid var(--secondary);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .code-line .keyword { color: #ff79c6; }
+        .code-line .type { color: #8be9fd; }
+        .code-line .method { color: #50fa7b; }
+        .code-line .string { color: #f1fa8c; }
+        .code-line .comment { color: #6272a4; font-style: italic; }
+        .code-line .annotation { color: #ffb86c; }
+        .code-line .number { color: #bd93f9; }
+
+        /* 分析过程 */
+        .analysis-section {
+            margin-top: 20px;
+        }
+
+        .step-box {
+            background: #f9fafb;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 2px solid #e5e7eb;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+        }
+
+        .step-box.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .step-box.highlight {
+            border-color: var(--accent);
+            background: #fffbeb;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background: var(--compile);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        .step-title {
+            font-weight: 700;
+            color: var(--text-primary);
+            font-size: 1.05em;
+        }
+
+        .step-content {
+            padding-left: 44px;
+            color: var(--text-secondary);
+        }
+
+        .step-content code {
+            background: #e5e7eb;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+            color: var(--danger);
+        }
+
+        .step-result {
+            margin-top: 12px;
+            padding: 12px 16px;
+            background: rgba(16, 185, 129, 0.1);
+            border-left: 4px solid var(--secondary);
+            border-radius: 0 8px 8px 0;
+        }
+
+        .step-result strong {
+            color: var(--secondary);
+        }
+
+        /* 字节码展示 */
+        .bytecode-box {
+            background: #1e1e2e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 16px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .bytecode-instruction {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px;
+            margin: 8px 0;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            color: #f8f8f2;
+            opacity: 0;
+            transform: translateX(-20px);
+            transition: all 0.4s ease;
+        }
+
+        .bytecode-instruction.active {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .bytecode-instruction.highlight {
+            background: rgba(245, 158, 11, 0.2);
+            border: 1px solid var(--accent);
+        }
+
+        .bytecode-op {
+            color: #ff79c6;
+            font-weight: 600;
+            min-width: 120px;
+        }
+
+        .bytecode-arg {
+            color: #50fa7b;
+        }
+
+        .bytecode-comment {
+            color: #6272a4;
+            margin-left: auto;
+            font-size: 0.9em;
+        }
+
+        /* ===== 阶段二：类加载期 ===== */
+        .classload-stage {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .class-box {
+            background: var(--bg-card);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .class-header {
+            padding: 20px 24px;
+            color: white;
+            font-weight: 700;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .class-header.father {
+            background: linear-gradient(135deg, var(--classload), #0891b2);
+        }
+
+        .class-header.son {
+            background: linear-gradient(135deg, var(--runtime), #db2777);
+        }
+
+        .class-content {
+            padding: 24px;
+        }
+
+        .class-info {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .class-info-row {
+            display: flex;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .class-info-row:last-child {
+            border-bottom: none;
+        }
+
+        .class-info-label {
+            width: 100px;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        .class-info-value {
+            flex: 1;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* vtable展示 */
+        .vtable-section {
+            margin-top: 20px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+        }
+
+        .vtable-section.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .vtable-header {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            padding: 12px 16px;
+            border-radius: 10px 10px 0 0;
+            font-weight: 700;
+            color: #92400e;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .vtable-body {
+            background: white;
+            border: 2px solid #fde68a;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            overflow: hidden;
+        }
+
+        .vtable-row {
+            display: flex;
+            align-items: center;
+            padding: 14px 16px;
+            border-bottom: 1px solid #f3f4f6;
+            opacity: 0;
+            transform: translateX(20px);
+            transition: all 0.4s ease;
+        }
+
+        .vtable-row.active {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .vtable-row:last-child {
+            border-bottom: none;
+        }
+
+        .vtable-row.highlight {
+            background: #fef3c7;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .vtable-index {
+            min-width: 80px;
+            padding: 6px 12px;
+            background: var(--classload);
+            color: white;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 0.85em;
+            text-align: center;
+            margin-right: 16px;
+        }
+
+        .vtable-method {
+            flex: 1;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+        }
+
+        .vtable-method-name {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .vtable-method-addr {
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            margin-top: 4px;
+        }
+
+        .vtable-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .vtable-badge.override {
+            background: rgba(236, 72, 153, 0.15);
+            color: var(--runtime);
+        }
+
+        .vtable-badge.inherit {
+            background: rgba(107, 114, 128, 0.15);
+            color: var(--text-secondary);
+        }
+
+        .vtable-note {
+            background: linear-gradient(135deg, #fef2f2, #fee2e2);
+            border: 2px solid #fca5a5;
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+
+        .vtable-note h4 {
+            color: #dc2626;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .vtable-note p {
+            color: #991b1b;
+            font-size: 0.95em;
+            line-height: 1.7;
+        }
+
+        /* ===== 阶段三：运行期 ===== */
+        .runtime-stage {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr 1.3fr;
+            gap: 20px;
+        }
+
+        .memory-panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .memory-header {
+            padding: 16px 20px;
+            color: white;
+            font-weight: 700;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .memory-header.stack { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .memory-header.heap { background: linear-gradient(135deg, #10b981, #059669); }
+        .memory-header.method { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+
+        .memory-content {
+            padding: 20px;
+            min-height: 400px;
+        }
+
+        /* 栈帧 */
+        .stack-frame {
+            background: linear-gradient(135deg, #fef2f2, #fee2e2);
+            border: 2px solid #fca5a5;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.5s ease;
+        }
+
+        .stack-frame.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .frame-title {
+            font-weight: 700;
+            color: #dc2626;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px dashed #fca5a5;
+        }
+
+        .frame-section {
+            margin-top: 12px;
+        }
+
+        .frame-section-title {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .var-slot {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: white;
+            border-radius: 6px;
+            margin: 6px 0;
+            border-left: 3px solid #ef4444;
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: all 0.3s ease;
+        }
+
+        .var-slot.active {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .var-slot.highlight {
+            background: #fef3c7;
+            border-left-color: var(--accent);
+        }
+
+        .var-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .var-type {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+
+        .var-value {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        /* 堆对象 */
+        .heap-object {
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+            border: 3px solid #10b981;
+            border-radius: 14px;
+            padding: 20px;
+            opacity: 0;
+            transform: scale(0.9);
+            transition: all 0.5s ease;
+        }
+
+        .heap-object.active {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .heap-object.highlight {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.3);
+            animation: glow 1.5s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.3); }
+            50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0.5); }
+        }
+
+        .object-title {
+            background: #10b981;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 16px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .object-section {
+            margin-top: 16px;
+        }
+
+        .object-section-header {
+            font-weight: 600;
+            color: #065f46;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95em;
+        }
+
+        .object-field {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: white;
+            border-radius: 6px;
+            margin: 6px 0;
+            border-left: 3px solid #10b981;
+        }
+
+        .object-field.pointer {
+            border-left-color: var(--danger);
+            background: #fef2f2;
+        }
+
+        .object-field.pointer .field-value {
+            color: var(--danger);
+            font-weight: 700;
+        }
+
+        .field-name {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .field-value {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        /* 方法区内容 */
+        .method-class-info {
+            background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+            border: 2px solid #6366f1;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+        }
+
+        .method-class-info.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .method-class-title {
+            background: var(--primary);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        /* 数据流箭头 */
+        .data-flow {
+            position: relative;
+            margin: 20px 0;
+            padding: 16px;
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border-radius: 12px;
+            border: 2px solid var(--accent);
+        }
+
+        .flow-title {
+            font-weight: 700;
+            color: #92400e;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .flow-step {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin: 8px 0;
+            background: white;
+            border-radius: 8px;
+            opacity: 0;
+            transform: translateX(-20px);
+            transition: all 0.4s ease;
+        }
+
+        .flow-step.active {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .flow-step.current {
+            background: #d1fae5;
+            border: 2px solid var(--secondary);
+        }
+
+        .flow-num {
+            width: 28px;
+            height: 28px;
+            background: var(--accent);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.85em;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .flow-arrow {
+            color: var(--accent);
+            font-size: 1.2em;
+            margin: 0 12px;
+        }
+
+        /* ===== 说明面板 ===== */
+        .explanation-panel {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 24px;
+            box-shadow: var(--shadow);
+            border-top: 4px solid var(--accent);
+        }
+
+        .explanation-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .explanation-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4em;
+        }
+
+        .explanation-title {
+            font-size: 1.25em;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .explanation-content {
+            color: var(--text-primary);
+            line-height: 1.9;
+        }
+
+        .explanation-content strong {
+            color: var(--primary);
+        }
+
+        .explanation-content code {
+            background: #f3f4f6;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+            color: var(--danger);
+        }
+
+        .tip-box {
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+            border: 2px solid var(--secondary);
+            border-radius: 10px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .tip-box h4 {
+            color: #065f46;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tip-box p, .tip-box ul {
+            color: #047857;
+        }
+
+        .warning-box {
+            background: linear-gradient(135deg, #fef2f2, #fee2e2);
+            border: 2px solid var(--danger);
+            border-radius: 10px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .warning-box h4 {
+            color: #dc2626;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .warning-box p {
+            color: #991b1b;
+        }
+
+        .key-point {
+            background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+            border: 2px solid var(--primary);
+            border-radius: 10px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .key-point h4 {
+            color: var(--primary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .key-point p {
+            color: #3730a3;
+        }
+
+        /* 对比表格 */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .comparison-table th {
+            background: var(--primary);
+            color: white;
+            padding: 14px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .comparison-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #e5e7eb;
+            background: white;
+        }
+
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .comparison-table .highlight-cell {
+            background: #fef3c7;
+            font-weight: 600;
+        }
+
+        /* ===== 总结卡片 ===== */
+        .summary-card {
+            background: linear-gradient(135deg, #1e1e2e, #2d2d44);
+            border-radius: 16px;
+            padding: 28px;
+            margin-top: 30px;
+            color: white;
+        }
+
+        .summary-title {
+            font-size: 1.5em;
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .summary-flow {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin: 24px 0;
+        }
+
+        .summary-stage {
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            min-width: 180px;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .summary-stage.compile { border-color: var(--compile); }
+        .summary-stage.classload { border-color: var(--classload); }
+        .summary-stage.runtime { border-color: var(--runtime); }
+
+        .summary-stage-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .summary-stage-title {
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .summary-stage-desc {
+            font-size: 0.9em;
+            color: rgba(255,255,255,0.7);
+        }
+
+        .summary-arrow {
+            font-size: 1.5em;
+            color: rgba(255,255,255,0.5);
+        }
+
+        .summary-conclusion {
+            background: rgba(16, 185, 129, 0.2);
+            border: 2px solid var(--secondary);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin-top: 24px;
+        }
+
+        .summary-conclusion h4 {
+            color: #6ee7b7;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .summary-conclusion p {
+            color: rgba(255,255,255,0.9);
+            line-height: 1.8;
+        }
+
+        /* ===== 术语弹窗 ===== */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            border-bottom: 2px dotted var(--primary);
+        }
+
+        .tooltip:hover .tooltip-content {
+            visibility: visible;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tooltip-content {
+            visibility: hidden;
+            opacity: 0;
+            transform: translateY(10px);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-dark);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            min-width: 250px;
+            z-index: 1000;
+            box-shadow: var(--shadow-lg);
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .tooltip-content::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 8px solid transparent;
+            border-top-color: var(--bg-dark);
+        }
+
+        /* ===== 测验区域 ===== */
+        .quiz-section {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border: 3px solid var(--accent);
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 30px;
+        }
+
+        .quiz-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #92400e;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .quiz-question {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .quiz-question h4 {
+            color: var(--text-primary);
+            margin-bottom: 16px;
+        }
+
+        .quiz-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .quiz-option {
+            padding: 14px 18px;
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .quiz-option:hover {
+            border-color: var(--primary);
+            background: #eef2ff;
+        }
+
+        .quiz-option.selected {
+            border-color: var(--primary);
+            background: #eef2ff;
+        }
+
+        .quiz-option.correct {
+            border-color: var(--secondary);
+            background: #d1fae5;
+        }
+
+        .quiz-option.wrong {
+            border-color: var(--danger);
+            background: #fee2e2;
+        }
+
+        .option-marker {
+            width: 28px;
+            height: 28px;
+            border: 2px solid #d1d5db;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .quiz-option.selected .option-marker {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        .quiz-option.correct .option-marker {
+            background: var(--secondary);
+            border-color: var(--secondary);
+            color: white;
+        }
+
+        .quiz-option.wrong .option-marker {
+            background: var(--danger);
+            border-color: var(--danger);
+            color: white;
+        }
+
+        .quiz-feedback {
+            margin-top: 16px;
+            padding: 16px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .quiz-feedback.show {
+            display: block;
+        }
+
+        .quiz-feedback.correct {
+            background: #d1fae5;
+            border: 2px solid var(--secondary);
+            color: #065f46;
+        }
+
+        .quiz-feedback.wrong {
+            background: #fee2e2;
+            border: 2px solid var(--danger);
+            color: #991b1b;
+        }
+
+        /* ===== 响应式 ===== */
+        @media (max-width: 1200px) {
+            .runtime-stage {
+                grid-template-columns: 1fr;
+            }
+
+            .compile-stage, .classload-stage {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 1.6em;
+            }
+
+            .timeline {
+                padding: 0 20px;
+            }
+
+            .timeline-dot {
+                width: 44px;
+                height: 44px;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .summary-flow {
+                flex-direction: column;
+            }
+
+            .summary-arrow {
+                transform: rotate(90deg);
+            }
+        }
+
+        /* ===== 工具类 ===== */
+        .text-compile { color: var(--compile); }
+        .text-classload { color: var(--classload); }
+        .text-runtime { color: var(--runtime); }
+        .text-success { color: var(--secondary); }
+        .text-warning { color: var(--accent); }
+        .text-danger { color: var(--danger); }
+
+        .bg-compile { background: var(--compile); }
+        .bg-classload { background: var(--classload); }
+        .bg-runtime { background: var(--runtime); }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- ===== 头部 ===== -->
+    <header class="header">
+        <h1>🔬 JVM方法调用全过程演示</h1>
+        <p class="header-subtitle">面向Java初学者的可视化教程 —— 理解多态的底层原理</p>
+        <div class="code-example">
+            <span class="type">Father</span> f = <span class="keyword">new</span> <span class="type">Son</span>();
+            f.<span class="method">method</span>(<span class="number">10</span>);
+        </div>
+    </header>
+
+    <!-- ===== 学习目标 ===== -->
+    <div class="learning-goals">
+        <h3>🎯 学完这个演示，你将理解：</h3>
+        <div class="goals-grid">
+            <div class="goal-item">
+                <div class="goal-icon">1</div>
+                <div class="goal-text">为什么 <code>f.method(10)</code> 会调用<strong>父类</strong>的实现？</div>
+            </div>
+            <div class="goal-item">
+                <div class="goal-icon">2</div>
+                <div class="goal-text"><strong>重载</strong>和<strong>重写</strong>分别在什么时候起作用？</div>
+            </div>
+            <div class="goal-item">
+                <div class="goal-icon">3</div>
+                <div class="goal-text">JVM是如何在运行时找到正确的方法的？</div>
+            </div>
+            <div class="goal-item">
+                <div class="goal-icon">4</div>
+                <div class="goal-text"><strong>虚方法表(vtable)</strong>是什么？它如何实现多态？</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 时间线 ===== -->
+    <div class="timeline-section">
+        <div class="timeline">
+            <div class="timeline-progress" id="timelineProgress"></div>
+            <div class="timeline-item" data-stage="0">
+                <div class="timeline-dot">0</div>
+                <div class="timeline-label">
+                    <div class="timeline-label-main">前置知识</div>
+                    <div class="timeline-label-sub">概念铺垫</div>
+                </div>
+            </div>
+            <div class="timeline-item" data-stage="1">
+                <div class="timeline-dot">1</div>
+                <div class="timeline-label">
+                    <div class="timeline-label-main">编译期</div>
+                    <div class="timeline-label-sub">静态分派</div>
+                </div>
+            </div>
+            <div class="timeline-item" data-stage="2">
+                <div class="timeline-dot">2</div>
+                <div class="timeline-label">
+                    <div class="timeline-label-main">类加载期</div>
+                    <div class="timeline-label-sub">构建vtable</div>
+                </div>
+            </div>
+            <div class="timeline-item" data-stage="3">
+                <div class="timeline-dot">3</div>
+                <div class="timeline-label">
+                    <div class="timeline-label-main">运行期</div>
+                    <div class="timeline-label-sub">动态分派</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 进度指示器 ===== -->
+    <div class="progress-indicator">
+        <div class="step-counter">
+            步骤 <span id="currentStep">0</span> / <span id="totalSteps">0</span>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+    </div>
+
+    <!-- ===== 控制按钮 ===== -->
+    <div class="controls">
+        <button class="btn btn-primary" onclick="startAnimation()" id="startBtn">
+            <span class="btn-icon">▶</span>
+            开始完整演示
+            <span class="keyboard-hint">Space</span>
+        </button>
+        <button class="btn btn-secondary" onclick="prevStep()" id="prevBtn" disabled>
+            <span class="btn-icon">◀</span>
+            上一步
+            <span class="keyboard-hint">←</span>
+        </button>
+        <button class="btn btn-secondary" onclick="nextStep()" id="nextBtn">
+            <span class="btn-icon">▶</span>
+            下一步
+            <span class="keyboard-hint">→</span>
+        </button>
+        <button class="btn btn-secondary" onclick="resetAnimation()">
+            <span class="btn-icon">↺</span>
+            重置
+            <span class="keyboard-hint">R</span>
+        </button>
+        <button class="btn btn-secondary" onclick="toggleSpeed()">
+            <span class="btn-icon">⚡</span>
+            速度: <span id="speedText">正常</span>
+        </button>
+    </div>
+
+    <!-- ===== 主内容区 ===== -->
+    <div class="stage-content">
+        <!-- 阶段零：前置知识 -->
+        <div class="stage-panel" id="stage0">
+            <div class="intro-stage" id="introContent"></div>
+        </div>
+
+        <!-- 阶段一：编译期 -->
+        <div class="stage-panel" id="stage1">
+            <div class="compile-stage">
+                <div class="panel">
+                    <div class="panel-header compile">
+                        <div class="panel-icon compile">📝</div>
+                        <div class="panel-title">Java 源代码</div>
+                    </div>
+                    <div class="code-display" id="sourceCode">
+                        <div class="code-line"><span class="comment">// ========== 父类定义 ==========</span></div>
+                        <div class="code-line"><span class="keyword">class</span> <span class="type">Father</span> {</div>
+                        <div class="code-line">    <span class="comment">// 方法一：无参版本</span></div>
+                        <div class="code-line">    <span class="keyword">public void</span> <span class="method">method</span>() {</div>
+                        <div class="code-line">        System.out.println(<span class="string">"Father.method()"</span>);</div>
+                        <div class="code-line">    }</div>
+                        <div class="code-line"></div>
+                        <div class="code-line">    <span class="comment">// 方法二：带int参数版本</span></div>
+                        <div class="code-line">    <span class="keyword">public void</span> <span class="method">method</span>(<span class="type">int</span> i) {</div>
+                        <div class="code-line">        System.out.println(<span class="string">"Father.method(int): "</span> + i);</div>
+                        <div class="code-line">    }</div>
+                        <div class="code-line">}</div>
+                        <div class="code-line"></div>
+                        <div class="code-line"><span class="comment">// ========== 子类定义 ==========</span></div>
+                        <div class="code-line"><span class="keyword">class</span> <span class="type">Son</span> <span class="keyword">extends</span> <span class="type">Father</span> {</div>
+                        <div class="code-line">    <span class="annotation">@Override</span>  <span class="comment">// 只重写了无参版本！</span></div>
+                        <div class="code-line">    <span class="keyword">public void</span> <span class="method">method</span>() {</div>
+                        <div class="code-line">        System.out.println(<span class="string">"Son.method()"</span>);</div>
+                        <div class="code-line">    }</div>
+                        <div class="code-line">    <span class="comment">// 注意：没有重写 method(int) ！</span></div>
+                        <div class="code-line">}</div>
+                        <div class="code-line"></div>
+                        <div class="code-line"><span class="comment">// ========== 调用代码 ==========</span></div>
+                        <div class="code-line" id="codeLine1"><span class="type">Father</span> f = <span class="keyword">new</span> <span class="type">Son</span>();</div>
+                        <div class="code-line" id="codeLine2">f.<span class="method">method</span>(<span class="number">10</span>);  <span class="comment">// ← 重点分析这行！</span></div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header compile">
+                        <div class="panel-icon compile">⚙️</div>
+                        <div class="panel-title">编译期分析过程</div>
+                    </div>
+                    <div class="analysis-section" id="compileAnalysis"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 阶段二：类加载期 -->
+        <div class="stage-panel" id="stage2">
+            <div class="classload-stage">
+                <div class="class-box">
+                    <div class="class-header father">
+                        <span>📦</span> Father 类加载
+                    </div>
+                    <div class="class-content" id="fatherClassContent"></div>
+                </div>
+
+                <div class="class-box">
+                    <div class="class-header son">
+                        <span>📦</span> Son 类加载
+                    </div>
+                    <div class="class-content" id="sonClassContent"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 阶段三：运行期 -->
+        <div class="stage-panel" id="stage3">
+            <div class="runtime-stage">
+                <div class="memory-panel">
+                    <div class="memory-header stack">
+                        <span>📚</span> JVM 栈
+                    </div>
+                    <div class="memory-content" id="stackContent"></div>
+                </div>
+
+                <div class="memory-panel">
+                    <div class="memory-header heap">
+                        <span>🎯</span> 堆内存
+                    </div>
+                    <div class="memory-content" id="heapContent"></div>
+                </div>
+
+                <div class="memory-panel">
+                    <div class="memory-header method">
+                        <span>📖</span> 方法区
+                    </div>
+                    <div class="memory-content" id="methodContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 说明面板 ===== -->
+    <div class="explanation-panel">
+        <div class="explanation-header">
+            <div class="explanation-icon">💡</div>
+            <div class="explanation-title" id="explanationTitle">欢迎开始学习</div>
+        </div>
+        <div class="explanation-content" id="explanationContent">
+            <p>点击<strong>"开始完整演示"</strong>或<strong>"下一步"</strong>按钮开始学习。</p>
+            <p style="margin-top: 12px;">我们将按照 <strong class="text-compile">编译期</strong> → <strong class="text-classload">类加载期</strong> → <strong class="text-runtime">运行期</strong> 的顺序，完整展示JVM方法调用的全过程。</p>
+            <div class="tip-box" style="margin-top: 16px;">
+                <h4>⌨️ 快捷键提示</h4>
+                <p>
+                    <code>→</code> 下一步 &nbsp;|&nbsp;
+                    <code>←</code> 上一步 &nbsp;|&nbsp;
+                    <code>Space</code> 开始/暂停 &nbsp;|&nbsp;
+                    <code>R</code> 重置
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ===== 全局状态 =====
+    let currentStep = 0;
+    let currentStage = -1;
+    let isPlaying = false;
+    let playTimer = null;
+    let speed = 1;
+    const delays = { 1: 3000, 2: 2000, 3: 1200 };
+
+    // ===== 所有步骤定义 =====
+    const steps = [
+        // ========== 阶段零：前置知识 ==========
+        {
+            stage: 0,
+            title: "前置知识 - 为什么要学这个？",
+            action: () => {
+                document.getElementById('introContent').innerHTML = `
+                    <div class="concept-card">
+                        <h3>🤔 一个让很多人困惑的问题</h3>
+                        <div class="concept-content">
+                            <p>看下面这段代码：</p>
+                            <div class="code-display" style="margin: 16px 0;">
+                                <div class="code-line"><span class="type">Father</span> f = <span class="keyword">new</span> <span class="type">Son</span>();</div>
+                                <div class="code-line">f.<span class="method">method</span>(<span class="number">10</span>);  <span class="comment">// 输出什么？</span></div>
+                            </div>
+                            <p style="margin-top: 16px;"><strong>问题：</strong>这行代码会调用 Father 还是 Son 的方法？</p>
+                            <div class="analogy-box">
+                                <h4>💭 你可能会想...</h4>
+                                <p>"f 实际指向的是 Son 对象，所以应该调用 Son 的方法吧？"</p>
+                                <p style="margin-top: 8px;"><strong>但答案可能出乎你的意料！</strong></p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>很多Java初学者对这个问题感到困惑。要理解它，我们需要知道：</p>
+                <ul style="margin: 12px 0; padding-left: 24px; line-height: 2;">
+                    <li>JVM是<strong>分阶段</strong>处理方法调用的</li>
+                    <li>每个阶段负责解决<strong>不同的问题</strong></li>
+                    <li><strong>重载</strong>和<strong>重写</strong>发生在不同阶段</li>
+                </ul>
+                <p>接下来，我们先了解几个重要概念。</p>
+            `
+        },
+        {
+            stage: 0,
+            title: "前置知识 - 静态类型 vs 实际类型",
+            action: () => {
+                document.getElementById('introContent').innerHTML = `
+                    <div class="concept-card">
+                        <h3>📌 核心概念：两种类型</h3>
+                        <div class="concept-content">
+                            <div class="code-display" style="margin: 16px 0;">
+                                <div class="code-line"><span class="type">Father</span> f = <span class="keyword">new</span> <span class="type">Son</span>();</div>
+                                <div class="code-line"><span class="comment">//  ↑              ↑</span></div>
+                                <div class="code-line"><span class="comment">//  静态类型      实际类型</span></div>
+                            </div>
+
+                            <div class="key-terms">
+                                <div class="term-badge">
+                                    <strong>静态类型 (Static Type)</strong>
+                                    <span>变量声明时的类型，编译时确定，这里是 Father</span>
+                                </div>
+                                <div class="term-badge">
+                                    <strong>实际类型 (Actual Type)</strong>
+                                    <span>变量实际指向的对象类型，运行时确定，这里是 Son</span>
+                                </div>
+                            </div>
+
+                            <div class="analogy-box" style="margin-top: 20px;">
+                                <h4>🎭 生活类比</h4>
+                                <p>就像一个人的<strong>职位</strong>（静态类型）和<strong>真实身份</strong>（实际类型）可能不同。</p>
+                                <p>比如：一个"员工"（职位）实际上是"CEO的儿子"（真实身份）。</p>
+                                <p style="margin-top: 8px;">编译器只看"职位"，运行时才知道"真实身份"！</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <div class="key-point">
+                    <h4>🔑 关键理解</h4>
+                    <p><strong>编译器</strong>只能看到静态类型（Father），它在编译时不知道 f 将来会指向什么对象。</p>
+                    <p style="margin-top: 8px;"><strong>JVM</strong>在运行时才知道对象的实际类型（Son）。</p>
+                </div>
+                <p style="margin-top: 12px;">这个区别直接决定了：</p>
+                <ul style="padding-left: 24px; line-height: 2;">
+                    <li><strong>重载解析</strong>（选择哪个方法签名）→ 看<strong>静态类型</strong></li>
+                    <li><strong>动态分派</strong>（执行哪个实现）→ 看<strong>实际类型</strong></li>
+                </ul>
+            `
+        },
+        {
+            stage: 0,
+            title: "前置知识 - 重载 vs 重写",
+            action: () => {
+                document.getElementById('introContent').innerHTML = `
+                    <div class="concept-card">
+                        <h3>⚖️ 重载(Overload) vs 重写(Override)</h3>
+                        <div class="concept-content">
+                            <table class="comparison-table">
+                                <tr>
+                                    <th style="width: 120px;">对比项</th>
+                                    <th>重载 (Overload)</th>
+                                    <th>重写 (Override)</th>
+                                </tr>
+                                <tr>
+                                    <td><strong>定义</strong></td>
+                                    <td>同一个类中，方法名相同但<strong>参数不同</strong></td>
+                                    <td>子类重新实现父类的<strong>同签名</strong>方法</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>发生时机</strong></td>
+                                    <td class="highlight-cell">编译期</td>
+                                    <td class="highlight-cell">运行期</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>依据</strong></td>
+                                    <td>静态类型 + 参数类型</td>
+                                    <td>对象的实际类型</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>例子</strong></td>
+                                    <td>method() 和 method(int)</td>
+                                    <td>Father.method() 和 Son.method()</td>
+                                </tr>
+                            </table>
+
+                            <div class="warning-box" style="margin-top: 20px;">
+                                <h4>⚠️ 常见误区</h4>
+                                <p>很多人以为只要是子类对象，就会优先调用子类方法——这是<strong>错误的</strong>！</p>
+                                <p style="margin-top: 8px;">编译器首先会根据<strong>静态类型</strong>和<strong>参数</strong>决定调用哪个方法（重载解析），然后运行时才根据<strong>实际类型</strong>决定执行哪个实现（如果有重写的话）。</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>让我们用我们的例子来理解：</p>
+                <div style="margin: 16px 0; padding: 16px; background: #f9fafb; border-radius: 10px;">
+                    <p><code>f.method(10)</code> 的处理过程：</p>
+                    <ol style="padding-left: 24px; line-height: 2; margin-top: 8px;">
+                        <li><strong>编译期（重载解析）</strong>：f 的静态类型是 Father，参数是 int<br>→ 确定调用 <code>Father.method(int)</code></li>
+                        <li><strong>运行期（动态分派）</strong>：检查 Son 是否重写了 method(int)<br>→ 没有重写，所以执行 Father 的实现</li>
+                    </ol>
+                </div>
+                <p><strong>这就是为什么输出是 Father.method(int) 而不是 Son 的方法！</strong></p>
+            `
+        },
+        {
+            stage: 0,
+            title: "前置知识 - JVM方法调用的三个阶段",
+            action: () => {
+                document.getElementById('introContent').innerHTML = `
+                    <div class="concept-card">
+                        <h3>🔄 JVM方法调用的三个阶段</h3>
+                        <div class="concept-content">
+                            <div style="display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 20px; margin: 24px 0;">
+                                <div style="background: rgba(139, 92, 246, 0.1); border: 3px solid var(--compile); border-radius: 16px; padding: 20px; text-align: center; min-width: 200px;">
+                                    <div style="font-size: 2em; margin-bottom: 10px;">⚙️</div>
+                                    <div style="font-weight: 700; color: var(--compile); font-size: 1.1em;">编译期</div>
+                                    <div style="color: var(--text-secondary); margin-top: 8px; font-size: 0.9em;">
+                                        .java → .class<br>
+                                        确定<strong>方法签名</strong>
+                                    </div>
+                                </div>
+                                <div style="font-size: 1.5em; color: #d1d5db;">→</div>
+                                <div style="background: rgba(6, 182, 212, 0.1); border: 3px solid var(--classload); border-radius: 16px; padding: 20px; text-align: center; min-width: 200px;">
+                                    <div style="font-size: 2em; margin-bottom: 10px;">📦</div>
+                                    <div style="font-weight: 700; color: var(--classload); font-size: 1.1em;">类加载期</div>
+                                    <div style="color: var(--text-secondary); margin-top: 8px; font-size: 0.9em;">
+                                        加载类到内存<br>
+                                        构建<strong>虚方法表</strong>
+                                    </div>
+                                </div>
+                                <div style="font-size: 1.5em; color: #d1d5db;">→</div>
+                                <div style="background: rgba(236, 72, 153, 0.1); border: 3px solid var(--runtime); border-radius: 16px; padding: 20px; text-align: center; min-width: 200px;">
+                                    <div style="font-size: 2em; margin-bottom: 10px;">🚀</div>
+                                    <div style="font-weight: 700; color: var(--runtime); font-size: 1.1em;">运行期</div>
+                                    <div style="color: var(--text-secondary); margin-top: 8px; font-size: 0.9em;">
+                                        实际执行<br>
+                                        <strong>动态分派</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tip-box">
+                                <h4>💡 记忆口诀</h4>
+                                <p><strong>"编译选签名，加载建表格，运行看类型"</strong></p>
+                                <p style="margin-top: 8px;">接下来我们将详细演示每个阶段的工作过程！</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>现在你已经了解了基本概念，让我们开始详细的演示！</p>
+                <div class="key-point">
+                    <h4>📋 接下来的演示将展示</h4>
+                    <p>
+                        <strong>1. 编译期</strong>：编译器如何决定调用 method(int) 而不是 method()<br>
+                        <strong>2. 类加载期</strong>：JVM 如何构建虚方法表(vtable)<br>
+                        <strong>3. 运行期</strong>：JVM 如何找到并执行正确的方法
+                    </p>
+                </div>
+                <p style="margin-top: 12px;">点击<strong>"下一步"</strong>进入编译期阶段 →</p>
+            `
+        },
+
+        // ========== 阶段一：编译期 ==========
+        {
+            stage: 1,
+            title: "编译期 - 高亮目标代码",
+            action: () => {
+                document.getElementById('codeLine2').classList.add('focus');
+                document.getElementById('compileAnalysis').innerHTML = `
+                    <div class="step-box active">
+                        <div class="step-header">
+                            <div class="step-number" style="background: var(--compile);">?</div>
+                            <div class="step-title">编译器看到了什么？</div>
+                        </div>
+                        <div class="step-content">
+                            <p>编译器正在分析这行代码：<code>f.method(10)</code></p>
+                            <div style="margin-top: 12px; padding: 16px; background: #f3f4f6; border-radius: 8px;">
+                                <p><strong>编译器掌握的信息：</strong></p>
+                                <ul style="margin-top: 8px; padding-left: 20px;">
+                                    <li>变量 <code>f</code> 的声明类型是 <strong>Father</strong></li>
+                                    <li>调用的方法名是 <strong>method</strong></li>
+                                    <li>传入的参数是 <strong>10</strong>（int类型）</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>编译器开始分析 <code>f.method(10)</code> 这行代码。</p>
+                <div class="warning-box">
+                    <h4>⚠️ 重要：编译器的"视野限制"</h4>
+                    <p>编译器<strong>只能看到静态类型</strong>！它不知道 f 在运行时会指向什么对象。</p>
+                    <p style="margin-top: 8px;">虽然我们写了 <code>Father f = new Son()</code>，但编译器只关心左边的 <code>Father</code>。</p>
+                </div>
+            `
+        },
+        {
+            stage: 1,
+            title: "编译期 - 第一步：确定接收者类型",
+            action: () => {
+                document.getElementById('codeLine1').classList.add('highlight');
+                document.getElementById('compileAnalysis').innerHTML = `
+                    <div class="step-box active">
+                        <div class="step-header">
+                            <div class="step-number" style="background: var(--compile);">1</div>
+                            <div class="step-title">确定接收者的静态类型</div>
+                        </div>
+                        <div class="step-content">
+                            <p>查看变量 <code>f</code> 是如何声明的：</p>
+                            <div class="code-display" style="margin: 12px 0;">
+                                <div class="code-line"><span class="type">Father</span> f = <span class="keyword">new</span> <span class="type">Son</span>();</div>
+                                <div class="code-line"><span class="comment">//  ↑ 编译器只看这里！</span></div>
+                            </div>
+                            <div class="step-result">
+                                <strong>✓ 接收者静态类型：Father</strong>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>编译器首先确定方法调用的<strong>接收者类型</strong>。</p>
+                <div class="tip-box">
+                    <h4>💡 什么是接收者？</h4>
+                    <p>在 <code>f.method(10)</code> 中，<code>f</code> 就是接收者——它"接收"这个方法调用。</p>
+                </div>
+                <p style="margin-top: 12px;">编译器从声明语句 <code>Father f = ...</code> 得知 f 的静态类型是 <strong>Father</strong>。</p>
+                <p>接下来，编译器将在 Father 类中查找可能被调用的方法。</p>
+            `
+        },
+        {
+            stage: 1,
+            title: "编译期 - 第二步：查找候选方法",
+            action: () => {
+                // 高亮 Father 类中的两个方法
+                const codeLines = document.querySelectorAll('.code-line');
+                codeLines[3].classList.add('highlight'); // method()
+                codeLines[8].classList.add('highlight'); // method(int)
+
+                document.getElementById('compileAnalysis').innerHTML += `
+                    <div class="step-box active" style="transition-delay: 0.2s;">
+                        <div class="step-header">
+                            <div class="step-number" style="background: var(--compile);">2</div>
+                            <div class="step-title">在 Father 类中查找候选方法</div>
+                        </div>
+                        <div class="step-content">
+                            <p>Father 类中名为 <code>method</code> 的方法有：</p>
+                            <div style="display: grid; gap: 12px; margin-top: 12px;">
+                                <div style="padding: 14px; background: #f3f4f6; border-radius: 8px; border-left: 4px solid #6366f1;">
+                                    <strong style="color: var(--primary);">候选1：</strong>
+                                    <code>void method()</code> — 无参数
+                                </div>
+                                <div style="padding: 14px; background: #f3f4f6; border-radius: 8px; border-left: 4px solid #6366f1;">
+                                    <strong style="color: var(--primary);">候选2：</strong>
+                                    <code>void method(int i)</code> — 一个 int 参数
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>编译器在 Father 类中找到了两个同名方法，这就是<strong>方法重载</strong>。</p>
+                <div class="key-point">
+                    <h4>🔍 重载方法的特点</h4>
+                    <p>方法名相同，但参数列表不同（参数类型、个数、顺序）。</p>
+                    <p style="margin-top: 8px;">编译器需要根据<strong>实际传入的参数</strong>来决定调用哪一个。</p>
+                </div>
+            `
+        },
+        {
+            stage: 1,
+            title: "编译期 - 第三步：参数匹配",
+            action: () => {
+                document.getElementById('compileAnalysis').innerHTML += `
+                    <div class="step-box active highlight" style="transition-delay: 0.2s;">
+                        <div class="step-header">
+                            <div class="step-number" style="background: var(--accent);">3</div>
+                            <div class="step-title">参数匹配（重载解析）</div>
+                        </div>
+                        <div class="step-content">
+                            <p>调用传入的参数：<code>10</code>（int 类型）</p>
+                            <div style="margin-top: 16px;">
+                                <div style="display: flex; align-items: center; padding: 14px; background: #fee2e2; border-radius: 8px; margin-bottom: 10px;">
+                                    <span style="font-size: 1.3em; margin-right: 12px;">❌</span>
+                                    <span><code>method()</code> — 需要 0 个参数，实际传入 1 个</span>
+                                </div>
+                                <div style="display: flex; align-items: center; padding: 14px; background: #d1fae5; border-radius: 8px;">
+                                    <span style="font-size: 1.3em; margin-right: 12px;">✅</span>
+                                    <span><code>method(int)</code> — 需要 1 个 int 参数，完美匹配！</span>
+                                </div>
+                            </div>
+                            <div class="step-result">
+                                <strong>✓ 重载解析结果：Father.method(int)</strong>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>编译器通过<strong>参数匹配</strong>确定了具体调用哪个方法。</p>
+                <div class="tip-box">
+                    <h4>📝 重载解析规则（简化版）</h4>
+                    <p>1. 参数个数必须匹配</p>
+                    <p>2. 参数类型必须兼容（可以有自动类型转换）</p>
+                    <p>3. 如果多个方法都匹配，选择"最精确"的那个</p>
+                </div>
+                <p style="margin-top: 12px;">在我们的例子中，传入 int 类型的 10，只有 <code>method(int)</code> 匹配。</p>
+            `
+        },
+        {
+            stage: 1,
+            title: "编译期 - 生成字节码指令",
+            action: () => {
+                document.getElementById('compileAnalysis').innerHTML += `
+                    <div style="margin-top: 24px;">
+                        <div style="font-weight: 700; font-size: 1.1em; color: var(--compile); margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                            <span>📄</span> 生成的字节码
+                        </div>
+                        <div class="bytecode-box">
+                            <div class="bytecode-instruction active">
+                                <span class="bytecode-op">aload_1</span>
+                                <span class="bytecode-arg"></span>
+                                <span class="bytecode-comment">// 将变量 f 压入操作数栈</span>
+                            </div>
+                            <div class="bytecode-instruction active" style="transition-delay: 0.15s;">
+                                <span class="bytecode-op">bipush</span>
+                                <span class="bytecode-arg">10</span>
+                                <span class="bytecode-comment">// 将常量 10 压入栈</span>
+                            </div>
+                            <div class="bytecode-instruction active highlight" style="transition-delay: 0.3s;">
+                                <span class="bytecode-op">invokevirtual</span>
+                                <span class="bytecode-arg">#4 &lt;Father.method:(I)V&gt;</span>
+                                <span class="bytecode-comment">// 调用虚方法</span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 16px; padding: 16px; background: rgba(139, 92, 246, 0.1); border-radius: 10px; border: 2px solid var(--compile);">
+                            <p><strong style="color: var(--compile);">关键信息解读：</strong></p>
+                            <ul style="margin-top: 8px; padding-left: 20px; color: var(--text-secondary);">
+                                <li><code>invokevirtual</code> — 调用虚方法（支持多态）</li>
+                                <li><code>Father.method</code> — 方法属于 Father 类</li>
+                                <li><code>(I)V</code> — 方法描述符：一个 int 参数，无返回值</li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>编译器生成了 <code>invokevirtual</code> 指令，这是调用虚方法的字节码。</p>
+                <div class="key-point">
+                    <h4>🔑 符号引用 vs 直接引用</h4>
+                    <p>此时字节码中只有<strong>符号引用</strong>（<code>Father.method:(I)V</code>），这只是一个"名字"。</p>
+                    <p style="margin-top: 8px;">真正的内存地址（直接引用）要到<strong>类加载期</strong>才会确定！</p>
+                </div>
+                <div class="warning-box" style="margin-top: 16px;">
+                    <h4>⚠️ 编译期的局限</h4>
+                    <p>编译器只知道要调用 <code>Father.method(int)</code>，但它<strong>不知道</strong>：</p>
+                    <ul style="padding-left: 20px; margin-top: 8px;">
+                        <li>方法在内存中的具体位置</li>
+                        <li>运行时对象的真实类型</li>
+                        <li>最终会执行哪个类的实现</li>
+                    </ul>
+                </div>
+            `
+        },
+        {
+            stage: 1,
+            title: "编译期 - 阶段小结",
+            action: () => {
+                document.getElementById('compileAnalysis').innerHTML += `
+                    <div class="summary-card" style="margin-top: 24px; background: linear-gradient(135deg, var(--compile), #7c3aed); padding: 24px; border-radius: 16px; color: white;">
+                        <div style="font-size: 1.2em; font-weight: 700; margin-bottom: 16px; text-align: center;">
+                            ✅ 编译期工作完成
+                        </div>
+                        <div style="background: rgba(255,255,255,0.15); padding: 16px; border-radius: 10px;">
+                            <p><strong>本阶段完成了：</strong></p>
+                            <ul style="margin-top: 8px; padding-left: 20px;">
+                                <li>根据静态类型 <code>Father</code> 查找候选方法</li>
+                                <li>根据参数 <code>int</code> 进行重载解析</li>
+                                <li>确定方法签名：<code>Father.method(int)</code></li>
+                                <li>生成字节码指令：<code>invokevirtual</code></li>
+                            </ul>
+                        </div>
+                        <div style="text-align: center; margin-top: 16px; color: rgba(255,255,255,0.9);">
+                            下一阶段：类加载期 →
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <div class="tip-box">
+                    <h4>📌 编译期总结</h4>
+                    <p><strong>解决的问题：</strong>调用哪个方法签名？</p>
+                    <p><strong>依据：</strong>静态类型 + 参数类型</p>
+                    <p><strong>结果：</strong>确定了 <code>Father.method(int)</code></p>
+                </div>
+                <p style="margin-top: 12px;">这就是<strong>静态分派</strong>（也叫重载解析）的过程。</p>
+                <p style="margin-top: 8px;">接下来进入<strong>类加载期</strong>，JVM 将构建虚方法表，为运行时的动态分派做准备。</p>
+            `
+        },
+
+        // ========== 阶段二：类加载期 ==========
+        {
+            stage: 2,
+            title: "类加载期 - 加载 Father 类",
+            action: () => {
+                document.getElementById('fatherClassContent').innerHTML = `
+                    <div class="class-info">
+                        <div class="class-info-row">
+                            <span class="class-info-label">类名</span>
+                            <span class="class-info-value">Father</span>
+                        </div>
+                        <div class="class-info-row">
+                            <span class="class-info-label">父类</span>
+                            <span class="class-info-value">java.lang.Object</span>
+                        </div>
+                        <div class="class-info-row">
+                            <span class="class-info-label">方法数</span>
+                            <span class="class-info-value">2 个自定义方法</span>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>JVM 开始加载 Father 类到<strong>方法区</strong>（也叫元空间）。</p>
+                <div class="tip-box">
+                    <h4>📦 类加载过程</h4>
+                    <p>JVM 读取 Father.class 文件，创建类的元数据结构，包括：</p>
+                    <ul style="padding-left: 20px; margin-top: 8px;">
+                        <li>类的基本信息（名称、访问权限等）</li>
+                        <li>常量池</li>
+                        <li>字段和方法信息</li>
+                        <li><strong>虚方法表 (vtable)</strong> ← 重点！</li>
+                    </ul>
+                </div>
+            `
+        },
+        {
+            stage: 2,
+            title: "类加载期 - 构建 Father 的虚方法表",
+            action: () => {
+                document.getElementById('fatherClassContent').innerHTML += `
+                    <div class="vtable-section active">
+                        <div class="vtable-header">
+                            🔗 虚方法表 (Virtual Method Table)
+                        </div>
+                        <div class="vtable-body">
+                            <div class="vtable-row active">
+                                <div class="vtable-index" style="background: #9ca3af;">索引 0-4</div>
+                                <div class="vtable-method">
+                                    <div class="vtable-method-name">（继承自 Object 的方法）</div>
+                                    <div class="vtable-method-addr">toString(), equals(), hashCode()...</div>
+                                </div>
+                            </div>
+                            <div class="vtable-row active" style="transition-delay: 0.15s;">
+                                <div class="vtable-index" style="background: var(--classload);">索引 5</div>
+                                <div class="vtable-method">
+                                    <div class="vtable-method-name">method() → Father.method()</div>
+                                    <div class="vtable-method-addr">地址: 0x1234F001</div>
+                                </div>
+                            </div>
+                            <div class="vtable-row active highlight" style="transition-delay: 0.3s;">
+                                <div class="vtable-index" style="background: var(--runtime);">索引 6</div>
+                                <div class="vtable-method">
+                                    <div class="vtable-method-name">method(int) → Father.method(int)</div>
+                                    <div class="vtable-method-addr">地址: 0x1234F002</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>JVM 为 Father 类构建了<strong>虚方法表</strong>。</p>
+                <div class="key-point">
+                    <h4>🔑 什么是虚方法表？</h4>
+                    <p>虚方法表是一个数组，每个元素存储一个方法的实际内存地址。</p>
+                    <p style="margin-top: 8px;">每个可以被重写的方法（非 static、非 final）都有一个固定的索引位置。</p>
+                </div>
+                <div class="tip-box" style="margin-top: 16px;">
+                    <h4>💡 索引的意义</h4>
+                    <p>编译期确定的 <code>Father.method(int)</code> 对应<strong>索引 6</strong>。</p>
+                    <p>这个索引号会被所有子类继承，这是实现多态的关键！</p>
+                </div>
+            `
+        },
+        {
+            stage: 2,
+            title: "类加载期 - 加载 Son 类",
+            action: () => {
+                document.getElementById('sonClassContent').innerHTML = `
+                    <div class="class-info">
+                        <div class="class-info-row">
+                            <span class="class-info-label">类名</span>
+                            <span class="class-info-value">Son</span>
+                        </div>
+                        <div class="class-info-row">
+                            <span class="class-info-label">父类</span>
+                            <span class="class-info-value" style="color: var(--runtime); font-weight: 600;">Father</span>
+                        </div>
+                        <div class="class-info-row">
+                            <span class="class-info-label">重写方法</span>
+                            <span class="class-info-value">1 个 (method())</span>
+                        </div>
+                        <div class="class-info-row">
+                            <span class="class-info-label">⚠️ 注意</span>
+                            <span class="class-info-value" style="color: var(--danger);">没有重写 method(int)！</span>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>接下来加载 Son 类。</p>
+                <div class="warning-box">
+                    <h4>⚠️ 关键信息</h4>
+                    <p>Son 类只重写了 <code>method()</code>（无参版本）。</p>
+                    <p style="margin-top: 8px;"><strong>没有</strong>重写 <code>method(int)</code>（带 int 参数的版本）！</p>
+                </div>
+                <p style="margin-top: 12px;">这个差异将在虚方法表中体现出来。</p>
+            `
+        },
+        {
+            stage: 2,
+            title: "类加载期 - 构建 Son 的虚方法表（关键！）",
+            action: () => {
+                document.getElementById('sonClassContent').innerHTML += `
+                    <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); padding: 16px; border-radius: 10px; margin: 16px 0; border: 2px solid var(--accent);">
+                        <strong style="color: #92400e;">🔧 vtable 构建规则：</strong>
+                        <ol style="margin-top: 8px; padding-left: 24px; color: #78350f;">
+                            <li>首先<strong>复制</strong>父类的 vtable 结构</li>
+                            <li>如果子类<strong>重写</strong>了某方法，替换对应索引的地址</li>
+                            <li>如果子类<strong>没重写</strong>，保留父类的地址</li>
+                        </ol>
+                    </div>
+
+                    <div class="vtable-section active">
+                        <div class="vtable-header" style="background: linear-gradient(135deg, #fce7f3, #fbcfe8);">
+                            🔗 Son 的虚方法表
+                        </div>
+                        <div class="vtable-body">
+                            <div class="vtable-row active">
+                                <div class="vtable-index" style="background: #9ca3af;">索引 0-4</div>
+                                <div class="vtable-method">
+                                    <div class="vtable-method-name">（继承的 Object 方法）</div>
+                                </div>
+                            </div>
+                            <div class="vtable-row active" style="transition-delay: 0.15s;">
+                                <div class="vtable-index" style="background: var(--runtime);">索引 5</div>
+                                <div class="vtable-method">
+                                    <div class="vtable-method-name">method() → <strong style="color: var(--runtime);">Son.method()</strong></div>
+                                    <div class="vtable-method-addr" style="color: var(--runtime);">地址: 0x5678S001 (已替换!)</div>
+                                </div>
+                                <span class="vtable-badge override">✓ 重写</span>
+                            </div>
+                            <div class="vtable-row active highlight" style="transition-delay: 0.3s;">
+                                <div class="vtable-index" style="background: #9ca3af;">索引 6</div>
+                                <div class="vtable-method">
+                                    <div class="vtable-method-name">method(int) → <strong>Father.method(int)</strong></div>
+                                    <div class="vtable-method-addr">地址: 0x1234F002 (保持父类)</div>
+                                </div>
+                                <span class="vtable-badge inherit">继承</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <div class="key-point">
+                    <h4>🔥 这就是核心所在！</h4>
+                    <p>对比 Son 的 vtable 中两个方法的不同处理：</p>
+                </div>
+                <table class="comparison-table" style="margin-top: 16px;">
+                    <tr>
+                        <th>索引</th>
+                        <th>方法</th>
+                        <th>处理</th>
+                        <th>指向</th>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>method()</td>
+                        <td class="highlight-cell">替换</td>
+                        <td>Son.method()</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>method(int)</td>
+                        <td>保留</td>
+                        <td>Father.method(int)</td>
+                    </tr>
+                </table>
+                <div class="warning-box" style="margin-top: 16px;">
+                    <h4>💡 这意味着什么？</h4>
+                    <p>即使创建的是 Son 对象，当调用 <code>method(int)</code> 时，</p>
+                    <p>JVM 查找 Son 的 vtable[6]，发现指向的是 <strong>Father.method(int)</strong>！</p>
+                </div>
+            `
+        },
+        {
+            stage: 2,
+            title: "类加载期 - 阶段小结",
+            action: () => {
+                document.getElementById('sonClassContent').innerHTML += `
+                    <div class="vtable-note">
+                        <h4>🎯 核心理解</h4>
+                        <p>Son 的 vtable 索引 6 仍然指向 Father.method(int)！</p>
+                        <p style="margin-top: 8px;">这是因为 Son 类<strong>没有重写</strong> method(int) 方法。</p>
+                        <p style="margin-top: 8px;">所以即使对象是 Son 类型，调用 method(int) 时也会执行父类的实现。</p>
+                    </div>
+                `;
+            },
+            explanation: `
+                <div class="tip-box">
+                    <h4>📌 类加载期总结</h4>
+                    <p><strong>解决的问题：</strong>为每个方法分配 vtable 索引，确定方法地址</p>
+                    <p><strong>关键发现：</strong></p>
+                    <ul style="padding-left: 20px; margin-top: 8px;">
+                        <li>Son vtable[5] → Son.method() （重写了）</li>
+                        <li>Son vtable[6] → Father.method(int) （没重写）</li>
+                    </ul>
+                </div>
+                <p style="margin-top: 12px;">现在所有准备工作完成，进入<strong>运行期</strong>！</p>
+            `
+        },
+
+        // ========== 阶段三：运行期 ==========
+        {
+            stage: 3,
+            title: "运行期 - main 方法启动",
+            action: () => {
+                document.getElementById('stackContent').innerHTML = `
+                    <div class="stack-frame active">
+                        <div class="frame-title">📚 main() 栈帧</div>
+                        <div class="frame-section">
+                            <div class="frame-section-title">局部变量表</div>
+                            <div class="var-slot active">
+                                <span><span class="var-name">args</span><span class="var-type">[String[]]</span></span>
+                                <span class="var-value">0x...</span>
+                            </div>
+                        </div>
+                        <div class="frame-section">
+                            <div class="frame-section-title">操作数栈</div>
+                            <div style="color: #9ca3af; text-align: center; padding: 12px;">（空）</div>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('methodContent').innerHTML = `
+                    <div class="method-class-info active">
+                        <div class="method-class-title">Son 类元数据</div>
+                        <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 8px;">虚方法表 (vtable)</div>
+                        <div style="background: white; border-radius: 8px; padding: 10px;">
+                            <div style="display: flex; align-items: center; padding: 8px; border-bottom: 1px solid #e5e7eb;">
+                                <span style="background: var(--primary); color: white; padding: 4px 10px; border-radius: 4px; font-size: 0.8em; margin-right: 10px;">索引 5</span>
+                                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.85em;">method() → Son</span>
+                            </div>
+                            <div style="display: flex; align-items: center; padding: 8px;">
+                                <span style="background: #9ca3af; color: white; padding: 4px 10px; border-radius: 4px; font-size: 0.8em; margin-right: 10px;">索引 6</span>
+                                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.85em;">method(int) → Father</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>程序开始运行！JVM 在栈上创建 main 方法的栈帧。</p>
+                <div class="tip-box">
+                    <h4>📚 JVM 运行时内存布局</h4>
+                    <p><strong>栈</strong>：存储方法调用的栈帧，包括局部变量、操作数栈等</p>
+                    <p><strong>堆</strong>：存储对象实例</p>
+                    <p><strong>方法区</strong>：存储类的元数据，包括 vtable</p>
+                </div>
+            `
+        },
+        {
+            stage: 3,
+            title: "运行期 - 创建 Son 对象",
+            action: () => {
+                document.getElementById('heapContent').innerHTML = `
+                    <div class="heap-object active">
+                        <div class="object-title">Son 对象 @ 0x7A2B3C4D</div>
+                        <div class="object-section">
+                            <div class="object-section-header">
+                                <span>🏷️</span> 对象头 (Object Header)
+                            </div>
+                            <div class="object-field">
+                                <span class="field-name">Mark Word</span>
+                                <span class="field-value">哈希码、锁状态...</span>
+                            </div>
+                            <div class="object-field pointer">
+                                <span class="field-name">类型指针 (Klass Pointer)</span>
+                                <span class="field-value">→ Son 类元数据</span>
+                            </div>
+                        </div>
+                        <div class="object-section">
+                            <div class="object-section-header">
+                                <span>📦</span> 实例数据
+                            </div>
+                            <div class="object-field">
+                                <span class="field-name">（无字段）</span>
+                                <span class="field-value">-</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // 更新栈中的变量
+                setTimeout(() => {
+                    const frameSection = document.querySelector('.frame-section');
+                    const newSlot = document.createElement('div');
+                    newSlot.className = 'var-slot';
+                    newSlot.innerHTML = `
+                        <span><span class="var-name">f</span><span class="var-type">[Father]</span></span>
+                        <span class="var-value">→ 0x7A2B3C4D</span>
+                    `;
+                    frameSection.appendChild(newSlot);
+                    setTimeout(() => newSlot.classList.add('active'), 50);
+                }, 400);
+            },
+            explanation: `
+                <p>执行 <code>Father f = new Son()</code>：</p>
+                <ol style="padding-left: 24px; line-height: 2;">
+                    <li><strong>在堆中创建 Son 对象</strong>，分配地址 0x7A2B3C4D</li>
+                    <li><strong>初始化对象头</strong>，类型指针指向 Son 类元数据</li>
+                    <li><strong>将引用存入变量 f</strong>（虽然声明类型是 Father）</li>
+                </ol>
+                <div class="key-point" style="margin-top: 16px;">
+                    <h4>🔑 类型指针的作用</h4>
+                    <p>对象头中的<strong>类型指针</strong>是动态分派的关键！</p>
+                    <p>它让 JVM 在运行时能找到对象的真实类型和对应的 vtable。</p>
+                </div>
+            `
+        },
+        {
+            stage: 3,
+            title: "运行期 - 开始执行方法调用",
+            action: () => {
+                document.querySelector('.heap-object').classList.add('highlight');
+
+                document.getElementById('heapContent').innerHTML += `
+                    <div style="margin-top: 20px; background: var(--bg-dark); color: #f8f8f2; padding: 16px; border-radius: 10px; font-family: 'JetBrains Mono', monospace;">
+                        <div style="color: #6272a4;">// 当前执行的代码</div>
+                        <div style="margin-top: 8px;">
+                            <span style="color: #8be9fd;">Father</span> f = <span style="color: #ff79c6;">new</span> <span style="color: #8be9fd;">Son</span>();
+                            <span style="color: #6272a4;">✓ 完成</span>
+                        </div>
+                        <div style="margin-top: 4px; background: var(--secondary); padding: 8px; border-radius: 6px;">
+                            f.<span style="color: #50fa7b;">method</span>(<span style="color: #bd93f9;">10</span>);
+                            <span style="color: #ffe;">← 正在执行</span>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p>现在执行 <code>f.method(10)</code>，JVM 开始<strong>动态分派</strong>过程。</p>
+                <div class="tip-box">
+                    <h4>🤔 JVM 需要解答的问题</h4>
+                    <p>1. ✅ 调用哪个方法签名？→ 编译期已确定：method(int)</p>
+                    <p>2. ✅ 在 vtable 的哪个位置？→ 类加载期已确定：索引 6</p>
+                    <p>3. ❓ 执行哪个类的实现？→ <strong>现在要确定！</strong></p>
+                </div>
+            `
+        },
+        {
+            stage: 3,
+            title: "运行期 - 动态分派第1步：获取对象引用",
+            action: () => {
+                document.querySelector('.var-slot:last-child').classList.add('highlight');
+
+                document.getElementById('methodContent').innerHTML += `
+                    <div class="data-flow" style="margin-top: 20px;">
+                        <div class="flow-title">
+                            <span>🔍</span> 动态分派执行流程
+                        </div>
+                        <div class="flow-step active">
+                            <div class="flow-num">1</div>
+                            <span>从栈帧获取变量 <code>f</code> 的值</span>
+                            <span class="flow-arrow">→</span>
+                            <span style="color: var(--primary); font-weight: 600;">0x7A2B3C4D</span>
+                        </div>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p><strong>第1步：获取对象引用</strong></p>
+                <p>JVM 从当前栈帧的局部变量表中读取变量 <code>f</code> 的值。</p>
+                <div style="margin: 16px 0; padding: 16px; background: #f9fafb; border-radius: 10px; font-family: 'JetBrains Mono', monospace; text-align: center;">
+                    f = <span style="color: var(--primary); font-weight: 600;">0x7A2B3C4D</span>
+                </div>
+                <p>这个值是堆中 Son 对象的内存地址。</p>
+            `
+        },
+        {
+            stage: 3,
+            title: "运行期 - 动态分派第2步：找到对象头",
+            action: () => {
+                const dataFlow = document.querySelector('.data-flow');
+                dataFlow.innerHTML += `
+                    <div class="flow-step active" style="transition-delay: 0.2s;">
+                        <div class="flow-num">2</div>
+                        <span>通过地址找到堆中的对象</span>
+                        <span class="flow-arrow">→</span>
+                        <span style="color: var(--secondary); font-weight: 600;">Son 对象</span>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p><strong>第2步：定位对象</strong></p>
+                <p>JVM 通过地址 0x7A2B3C4D 找到堆中的对象。</p>
+                <div class="tip-box">
+                    <h4>💡 注意</h4>
+                    <p>虽然变量 f 的声明类型是 Father，但它指向的<strong>实际对象</strong>是 Son。</p>
+                    <p>JVM 此时已经"看到"了对象的真实面目！</p>
+                </div>
+            `
+        },
+        {
+            stage: 3,
+            title: "运行期 - 动态分派第3步：读取类型指针",
+            action: () => {
+                document.querySelector('.object-field.pointer').classList.add('highlight');
+
+                const dataFlow = document.querySelector('.data-flow');
+                dataFlow.innerHTML += `
+                    <div class="flow-step active current" style="transition-delay: 0.2s;">
+                        <div class="flow-num">3</div>
+                        <span>读取对象头的<strong>类型指针</strong></span>
+                        <span class="flow-arrow">→</span>
+                        <span style="color: var(--danger); font-weight: 600;">Son 类元数据</span>
+                    </div>
+                `;
+            },
+            explanation: `
+                <p><strong>第3步：获取真实类型</strong></p>
+                <p>对象头中的<strong>类型指针（Klass Pointer）</strong>指向方法区中的 Son 类元数据。</p>
+                <div class="key-point">
+                    <h4>🔑 这是多态的关键！</h4>
+                    <p>正是通过类型指针，JVM 在运行时才知道对象的<strong>真实类型</strong>是 Son。</p>
+                    <p style="margin-top: 8px;">接下来，JVM 将在 <strong>Son 的 vtable</strong> 中查找方法。</p>
+                </div>
+            `
+        },
+        {
+            stage: 3,
+            title: "运行期 - 动态分派第4步：查询 vtable",
+            action: () => {
+                document.querySelector('.method-class-info').classList.add('highlight');
+
+                const dataFlow = document.querySelector('.data-flow');
+                dataFlow.innerHTML += `
+                    <div class="flow-step active" style="transition-delay: 0.2s;">
+                        <div class="flow-num">4</div>
+                        <span>在 Son 的 vtable 查找<strong>索引 6</strong></span>
+                        <span class="flow-arrow">→</span>
+                        <span style="color: var(--compile); font-weight: 600;">Father.method(int)</span>
+                    </div>
+                `;
+
+                // 高亮 vtable 中的索引 6
+                const vtableRows = document.querySelectorAll('.method-class-info div > div:last-child > div');
+                if (vtableRows.length > 1) {
+                    vtableRows[1].style.background = '#fef3c7';
+                    vtableRows[1].style.borderRadius = '6px';
+                }
+            },
+            explanation: `
+                <p><strong>第4步：查表确定方法地址</strong></p>
+                <p>编译期确定的方法签名 <code>Father.method(int)</code> 对应 <strong>vtable 索引 6</strong>。</p>
+                <div style="margin: 16px 0; padding: 20px; background: #f9fafb; border-radius: 10px; text-align: center;">
+                    <p style="font-family: 'JetBrains Mono', monospace;">
+                        Son.vtable[<span style="color: var(--primary);">6</span>] =
+                        <span style="color: var(--danger); font-weight: 600;">Father.method(int)</span> @ 0x1234F002
+                    </p>
+                </div>
+                <div class="warning-box">
+                    <h4>💡 为什么是 Father 的实现？</h4>
+                    <p>因为 Son 类<strong>没有重写</strong> method(int)！</p>
+                    <p>在类加载期，Son 的 vtable[6] 保留了父类的方法地址。</p>
+                </div>
+            `
+        },
+        {
+            stage: 3,
+            title: "运行期 - 执行方法",
+            action: () => {
+                const runtimeStage = document.querySelector('.runtime-stage');
+                const resultBox = document.createElement('div');
+                resultBox.style.cssText = 'grid-column: 1 / -1; margin-top: 20px;';
+                resultBox.innerHTML = `
+                    <div style="background: linear-gradient(135deg, var(--secondary), #059669); color: white; padding: 28px; border-radius: 16px; text-align: center; box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);">
+                        <div style="font-size: 2em; margin-bottom: 12px;">✅ 方法执行完成</div>
+                        <div style="background: rgba(255,255,255,0.2); padding: 16px 24px; border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 1.2em; display: inline-block;">
+                            输出: Father.method(int): 10
+                        </div>
+                    </div>
+                `;
+                runtimeStage.appendChild(resultBox);
+            },
+            explanation: `
+                <p>JVM 跳转到地址 <code>0x1234F002</code>，执行 <strong>Father.method(int)</strong> 的代码！</p>
+                <div class="key-point">
+                    <h4>🎉 完整流程回顾</h4>
+                    <table class="comparison-table">
+                        <tr>
+                            <th>阶段</th>
+                            <th>解决的问题</th>
+                            <th>结果</th>
+                        </tr>
+                        <tr>
+                            <td class="text-compile"><strong>编译期</strong></td>
+                            <td>选择哪个方法签名？</td>
+                            <td>Father.method(int)，索引 6</td>
+                        </tr>
+                        <tr>
+                            <td class="text-classload"><strong>类加载期</strong></td>
+                            <td>构建 vtable</td>
+                            <td>Son.vtable[6] → Father 实现</td>
+                        </tr>
+                        <tr>
+                            <td class="text-runtime"><strong>运行期</strong></td>
+                            <td>动态分派查表</td>
+                            <td>执行 Father.method(int)</td>
+                        </tr>
+                    </table>
+                </div>
+            `
+        },
+        {
+            stage: 3,
+            title: "对比思考：如果调用 f.method() 呢？",
+            action: () => {
+                const stageContent = document.querySelector('.stage-content');
+                const comparisonSection = document.createElement('div');
+                comparisonSection.innerHTML = `
+                    <div style="margin-top: 30px; background: white; border-radius: 16px; padding: 28px; box-shadow: var(--shadow);">
+                        <h3 style="text-align: center; color: var(--text-primary); margin-bottom: 24px; font-size: 1.4em;">
+                            🔄 对比分析：两种调用的不同结果
+                        </h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                            <div style="background: linear-gradient(135deg, #fef2f2, #fee2e2); border: 3px solid var(--danger); border-radius: 14px; padding: 20px;">
+                                <div style="font-size: 1.2em; font-weight: 700; color: var(--danger); margin-bottom: 16px; text-align: center;">
+                                    实际代码：f.method(10)
+                                </div>
+                                <div style="line-height: 2;">
+                                    <p><strong>编译期：</strong>method(int) → 索引 6</p>
+                                    <p><strong>Son vtable[6]：</strong>Father.method(int)</p>
+                                    <p><strong>执行结果：</strong><span style="color: var(--danger); font-weight: 700;">Father 的实现</span></p>
+                                    <p><strong>原因：</strong>Son 没有重写 method(int)</p>
+                                </div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, #ecfdf5, #d1fae5); border: 3px solid var(--secondary); border-radius: 14px; padding: 20px;">
+                                <div style="font-size: 1.2em; font-weight: 700; color: var(--secondary); margin-bottom: 16px; text-align: center;">
+                                    假如调用：f.method()
+                                </div>
+                                <div style="line-height: 2;">
+                                    <p><strong>编译期：</strong>method() → 索引 5</p>
+                                    <p><strong>Son vtable[5]：</strong>Son.method()</p>
+                                    <p><strong>执行结果：</strong><span style="color: var(--secondary); font-weight: 700;">Son 的实现</span></p>
+                                    <p><strong>原因：</strong>Son 重写了 method()</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                stageContent.appendChild(comparisonSection);
+            },
+            explanation: `
+                <div class="key-point">
+                    <h4>🎓 核心理解</h4>
+                    <p><strong>重载（Overload）</strong>：编译期根据<strong>参数类型</strong>决定调用哪个签名</p>
+                    <p><strong>重写（Override）</strong>：运行期根据<strong>实际类型</strong>决定执行哪个实现</p>
+                </div>
+                <p style="margin-top: 12px;">这两者结合，实现了 Java 的<strong>多态机制</strong>！</p>
+                <div class="tip-box" style="margin-top: 16px;">
+                    <h4>📝 最终答案</h4>
+                    <p><code>f.method(10)</code> 调用的是 <strong>Father.method(int)</strong></p>
+                    <p>因为：编译期选择了 method(int)（索引 6），而 Son 没有重写这个方法。</p>
+                </div>
+            `
+        },
+        {
+            stage: 3,
+            title: "全流程总结",
+            action: () => {
+                const stageContent = document.querySelector('.stage-content');
+                const summarySection = document.createElement('div');
+                summarySection.innerHTML = `
+                    <div class="summary-card" style="margin-top: 30px;">
+                        <div class="summary-title">
+                            <span>🎯</span> JVM 方法调用全流程总结
+                        </div>
+                        <div class="summary-flow">
+                            <div class="summary-stage compile">
+                                <div class="summary-stage-icon">⚙️</div>
+                                <div class="summary-stage-title">编译期</div>
+                                <div class="summary-stage-desc">
+                                    静态类型 + 参数<br>
+                                    → 确定方法签名<br>
+                                    <strong>Father.method(int)</strong>
+                                </div>
+                            </div>
+                            <div class="summary-arrow">→</div>
+                            <div class="summary-stage classload">
+                                <div class="summary-stage-icon">📦</div>
+                                <div class="summary-stage-title">类加载期</div>
+                                <div class="summary-stage-desc">
+                                    构建 vtable<br>
+                                    分配索引 6<br>
+                                    <strong>保留 Father 地址</strong>
+                                </div>
+                            </div>
+                            <div class="summary-arrow">→</div>
+                            <div class="summary-stage runtime">
+                                <div class="summary-stage-icon">🚀</div>
+                                <div class="summary-stage-title">运行期</div>
+                                <div class="summary-stage-desc">
+                                    类型指针 → vtable<br>
+                                    查找索引 6<br>
+                                    <strong>执行 Father 方法</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="summary-conclusion">
+                            <h4>🔑 记住这个口诀</h4>
+                            <p><strong>"编译选签名，加载建表格，运行看类型"</strong></p>
+                            <p style="margin-top: 12px;">重载在编译期决定，重写在运行期生效！</p>
+                        </div>
+                    </div>
+                `;
+                stageContent.appendChild(summarySection);
+            },
+            explanation: `
+                <p>恭喜你完成了整个演示！🎉</p>
+                <div class="key-point">
+                    <h4>📚 你学到了什么？</h4>
+                    <ul style="padding-left: 20px; line-height: 2;">
+                        <li>静态类型与实际类型的区别</li>
+                        <li>重载解析发生在编译期</li>
+                        <li>虚方法表的结构和作用</li>
+                        <li>动态分派的完整过程</li>
+                        <li>为什么 <code>f.method(10)</code> 调用了父类方法</li>
+                    </ul>
+                </div>
+                <p style="margin-top: 16px;">如果想巩固学习，可以点击<strong>"重置"</strong>按钮重新观看！</p>
+            `
+        }
+    ];
+
+    // ===== 更新时间线 =====
+    function updateTimeline() {
+        const items = document.querySelectorAll('.timeline-item');
+        const progress = document.getElementById('timelineProgress');
+
+        items.forEach((item, index) => {
+            const dot = item.querySelector('.timeline-dot');
+            const stage = parseInt(item.dataset.stage);
+
+            if (stage < currentStage) {
+                dot.classList.add('completed');
+                dot.classList.remove('active');
+                item.classList.remove('active');
+            } else if (stage === currentStage) {
+                dot.classList.add('active');
+                dot.classList.remove('completed');
+                item.classList.add('active');
+            } else {
+                dot.classList.remove('active', 'completed');
+                item.classList.remove('active');
+            }
+        });
+
+        const progressPercent = currentStage < 0 ? 0 : (currentStage / 3) * 100;
+        progress.style.width = progressPercent + '%';
+    }
+
+    // ===== 更新进度指示器 =====
+    function updateProgress() {
+        document.getElementById('currentStep').textContent = currentStep;
+        document.getElementById('totalSteps').textContent = steps.length;
+
+        const percent = steps.length > 0 ? (currentStep / steps.length) * 100 : 0;
+        document.getElementById('progressFill').style.width = percent + '%';
+    }
+
+    // ===== 更新阶段显示 =====
+    function updateStage(stage) {
+        currentStage = stage;
+
+        document.querySelectorAll('.stage-panel').forEach(panel => {
+            panel.classList.remove('active');
+        });
+
+        const targetPanel = document.getElementById('stage' + stage);
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+        }
+
+        updateTimeline();
+    }
+
+    // ===== 下一步 =====
+    function nextStep() {
+        if (currentStep >= steps.length) return;
+
+        const step = steps[currentStep];
+
+        if (step.stage !== currentStage) {
+            updateStage(step.stage);
+        }
+
+        step.action();
+
+        document.getElementById('explanationTitle').textContent = step.title;
+        document.getElementById('explanationContent').innerHTML = step.explanation;
+
+        currentStep++;
+        updateProgress();
+
+        // currentStep <= 1 表示只执行了第0步或还没执行，不能回退
+        document.getElementById('prevBtn').disabled = currentStep <= 1;
+        document.getElementById('nextBtn').disabled = currentStep >= steps.length;
+    }
+
+    // ===== 上一步 =====
+    function prevStep() {
+        // currentStep 表示"下一步将执行的步骤索引"
+        // 所以当前显示的是 steps[currentStep - 1]
+        // 要回退一步，需要显示 steps[currentStep - 2]
+        if (currentStep <= 1) return; // 至少执行过1步才能回退
+
+        const targetStep = currentStep - 2; // 要回到的步骤索引
+        resetToStep(targetStep);
+    }
+
+    // ===== 重置到指定步骤 =====
+    function resetToStep(targetStep) {
+        // 暂停播放
+        pauseAnimation();
+
+        // 清空所有内容（不调用resetAnimation，手动清理）
+        clearAllContent();
+
+        // 重置阶段状态
+        currentStage = -1;
+
+        // 重新执行从0到targetStep的所有步骤
+        for (let i = 0; i <= targetStep; i++) {
+            const step = steps[i];
+            if (step.stage !== currentStage) {
+                updateStage(step.stage);
+            }
+            step.action();
+
+            // 最后一步更新说明面板
+            if (i === targetStep) {
+                document.getElementById('explanationTitle').textContent = step.title;
+                document.getElementById('explanationContent').innerHTML = step.explanation;
+            }
+        }
+
+        // 更新currentStep为下一步的索引
+        currentStep = targetStep + 1;
+        updateProgress();
+
+        // 更新按钮状态
+        document.getElementById('prevBtn').disabled = currentStep <= 1;
+        document.getElementById('nextBtn').disabled = currentStep >= steps.length;
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('startBtn').innerHTML = '<span class="btn-icon">▶</span> 继续 <span class="keyboard-hint">Space</span>';
+    }
+
+    // ===== 清空所有内容（不重置currentStep） =====
+    function clearAllContent() {
+        // 清空各区域内容
+        document.getElementById('introContent').innerHTML = '';
+        document.getElementById('compileAnalysis').innerHTML = '';
+        document.getElementById('fatherClassContent').innerHTML = '';
+        document.getElementById('sonClassContent').innerHTML = '';
+        document.getElementById('stackContent').innerHTML = '';
+        document.getElementById('heapContent').innerHTML = '';
+        document.getElementById('methodContent').innerHTML = '';
+
+        // 移除所有高亮
+        document.querySelectorAll('.code-line').forEach(line => {
+            line.classList.remove('highlight', 'focus');
+        });
+
+        // 隐藏所有阶段面板
+        document.querySelectorAll('.stage-panel').forEach(panel => {
+            panel.classList.remove('active');
+        });
+
+        // 移除动态添加的元素
+        document.querySelectorAll('.runtime-stage > div:not(.memory-panel)').forEach(el => el.remove());
+        document.querySelectorAll('.stage-content > div:not(.stage-panel)').forEach(el => el.remove());
+    }
+
+    // ===== 开始自动播放 =====
+    function startAnimation() {
+        if (isPlaying) {
+            pauseAnimation();
+            return;
+        }
+
+        isPlaying = true;
+        document.getElementById('startBtn').innerHTML = '<span class="btn-icon">⏸</span> 暂停 <span class="keyboard-hint">Space</span>';
+
+        if (currentStep >= steps.length) {
+            resetAnimation();
+        }
+
+        playNextStep();
+    }
+
+    function playNextStep() {
+        if (!isPlaying || currentStep >= steps.length) {
+            if (currentStep >= steps.length) {
+                pauseAnimation();
+            }
+            return;
+        }
+
+        nextStep();
+        playTimer = setTimeout(playNextStep, delays[speed]);
+    }
+
+    function pauseAnimation() {
+        isPlaying = false;
+        if (playTimer) {
+            clearTimeout(playTimer);
+            playTimer = null;
+        }
+        document.getElementById('startBtn').innerHTML = '<span class="btn-icon">▶</span> 继续 <span class="keyboard-hint">Space</span>';
+    }
+
+    // ===== 重置 =====
+    function resetAnimation() {
+        pauseAnimation();
+        currentStep = 0;
+        currentStage = -1;
+
+        // 使用清空内容函数
+        clearAllContent();
+
+        // 重置说明面板
+        document.getElementById('explanationTitle').textContent = '欢迎开始学习';
+        document.getElementById('explanationContent').innerHTML = `
+            <p>点击<strong>"开始完整演示"</strong>或<strong>"下一步"</strong>按钮开始学习。</p>
+            <p style="margin-top: 12px;">我们将按照 <strong class="text-compile">编译期</strong> → <strong class="text-classload">类加载期</strong> → <strong class="text-runtime">运行期</strong> 的顺序，完整展示JVM方法调用的全过程。</p>
+        `;
+
+        updateTimeline();
+        updateProgress();
+
+        document.getElementById('startBtn').innerHTML = '<span class="btn-icon">▶</span> 开始完整演示 <span class="keyboard-hint">Space</span>';
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('nextBtn').disabled = false;
+        document.getElementById('prevBtn').disabled = true;
+    }
+
+    // ===== 切换速度 =====
+    function toggleSpeed() {
+        speed = speed >= 3 ? 1 : speed + 1;
+        const speedTexts = { 1: '正常', 2: '快速', 3: '极快' };
+        document.getElementById('speedText').textContent = speedTexts[speed];
+    }
+
+    // ===== 键盘快捷键 =====
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+        switch(e.key) {
+            case 'ArrowRight':
+                e.preventDefault();
+                if (!isPlaying) nextStep();
+                break;
+            case 'ArrowLeft':
+                e.preventDefault();
+                if (!isPlaying) prevStep();
+                break;
+            case ' ':
+                e.preventDefault();
+                startAnimation();
+                break;
+            case 'r':
+            case 'R':
+                e.preventDefault();
+                resetAnimation();
+                break;
+        }
+    });
+
+    // ===== 时间线点击事件 =====
+    document.querySelectorAll('.timeline-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const targetStage = parseInt(item.dataset.stage);
+
+            // 找到目标阶段的第一个步骤
+            for (let i = 0; i < steps.length; i++) {
+                if (steps[i].stage === targetStage) {
+                    resetToStep(i);
+                    break;
+                }
+            }
+        });
+    });
+
+    // ===== 初始化 =====
+    document.addEventListener('DOMContentLoaded', () => {
+        updateProgress();
+        document.getElementById('prevBtn').disabled = true;
+    });
+</script>
+</body>
+</html>
