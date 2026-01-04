@@ -1,3 +1,6 @@
+// 目的：熟悉多态是否掌握
+// 功能：输出什么
+
 package com.wzedu.poly_;
 
 public class PolyExercise {
