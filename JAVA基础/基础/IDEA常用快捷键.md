@@ -14,3 +14,4 @@
     - `sout` 输出 `System.out.println()`
     - `fori` 循环模版
     - `now` 显示当前时间
+13. 下方插入新行 `Shift + Enter`
