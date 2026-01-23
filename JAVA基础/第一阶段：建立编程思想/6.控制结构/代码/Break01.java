@@ -8,8 +8,8 @@ public class Break01 {
             // Math.random() 返回0.0且小于1.0的一个随机浮点数
             // Math.random()*100 返回0.0且小于100.0的一个随机浮点数
             // (int)(Math.random() * 100) 返回0且小于100的一个随机整数
-            // (int)(Math.random() * 100) + 1 返回0～100(包括100)的一个随机整数
-            int i = (int)(Math.random() * 100) + 1;
+            // (int)(Math.random() * 101)  返回0～100(包括100)的一个随机整数
+            int i = (int)(Math.random() * 101);
             System.out.println("i=" + i + " ，我已经循环了" + n++ + "次");
             if (i == 97)
                 break;

@@ -1,5 +1,5 @@
 // 功能：将个人信息打印输出
-// 目的：考察队转义字符的使用 以及 java两种不同输出方法的区别
+// 目的：考察对转义字符的使用 以及 java两种不同输出方法的区别
 
 public class Homework01 {
     public static void main(String[] args){
