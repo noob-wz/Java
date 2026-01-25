@@ -13,6 +13,7 @@ public class CharDetail {
         System.out.println(d);  // 输出a ，计算机存的是unicode的码点值，输出根据数据类型来显示
         System.out.println('A' + 12); // char类型数据可以进行算数运算，会自动升级为int类型
         System.out.println("A" + 12); // 输出A12，注意char类型参与运算和String类型参与运算的区别
+        System.out.println((char)('A' + 12)); // 以字符输出
     }
 }
 
