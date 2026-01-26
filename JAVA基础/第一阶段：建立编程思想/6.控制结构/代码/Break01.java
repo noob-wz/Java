@@ -3,6 +3,7 @@
 
 public class Break01 {
     public static void main(String[] args) {
+        // 方案一：不推荐，不知道循环多少次
         for(int n = 1;;) {
 
             // Math.random() 返回0.0且小于1.0的一个随机浮点数
@@ -14,6 +15,13 @@ public class Break01 {
             if (i == 97)
                 break;
         }
+
+        // 方案二：推荐，先执行一次并且知道什么时候结束
+        int n, i = 1;
+        do {
+            n = (int) (Math.random() * 101);
+            System.out.println("n=" + n + ", 这是第" + i++ + "次循环");
+        } while (n != 97);
     }
 }
 

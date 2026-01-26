@@ -3,6 +3,7 @@
 public class Array02 {
     public static void main(String[] args) {
         int[] arr = {4, -1, 9, 10, 23};
+
         int max = arr[0];
         int index = 0;
 
@@ -12,6 +13,7 @@ public class Array02 {
                 index = i;
             }
         }
+
         System.out.println("数组中最大的数是：" + max + " ，对应的数组索引是：" + index);
     }
 }

@@ -1,11 +1,13 @@
+//功能：打印九九乘法表
+//2026-01-26 11:09:04
 
 public class MultiplicationTable {
     public static void main(String[] args) {
-        for (int i = 1; i <= 9; i++) {
-            for (int j = 1; j <= i; j++) {
+        for(int i = 1; i <= 9; i++) {
+            for(int j = 1; j <= i; j++) {
                 System.out.print(j + " * " + i + " = " + i*j + "\t");
             }
-            System.out.println("");
+            System.out.println();
         }
     }
 }
@@ -23,3 +25,4 @@ public class MultiplicationTable {
 1 * 9 = 9	2 * 9 = 18	3 * 9 = 27	4 * 9 = 36	5 * 9 = 45	6 * 9 = 54	7 * 9 = 63	8 * 9 = 72	9 * 9 = 81
 --------------------------------
 */
+

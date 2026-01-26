@@ -173,23 +173,12 @@
             min-height: 24px;
         }
 
-        /* Explanation Tooltips */
-        .pointer-arrow {
-            position: absolute;
-            right: -10px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: yellow;
-            font-size: 20px;
-            display: none;
-        }
-
     </style>
 </head>
 <body>
 
 <header>
-    <h1>☕ Java 对象内存构建视图 (3D Layer Cake)</h1>
+    <h1>☕ Java 对象内存构建视图 (修正版)</h1>
     <p class="subtitle">Time (Initialization Order) + Space (Memory Layout)</p>
 </header>
 
@@ -264,6 +253,7 @@
         { text: "}", indent: 0 },
         { text: "", indent: 0 },
         { text: "class Son extends Father {", indent: 0 },
+        { text: "    // 注意：变量定义在代码块之前", type: 'comment' },
         { text: "    int id = 3003;", indent: 1, id: 's-field-id' },
         { text: "    int age = 18;", indent: 1, id: 's-field-age' },
         { text: "    { System.out.println('5. Son 构造代码块'); }", indent: 1, id: 's-block' },
@@ -293,9 +283,6 @@
             highlight: 'f-static',
             action: () => log("2. Father Static")
         },
-        // Assuming Son static would be here if it existed, skipping for exact match with user prompt logic
-        // But usually Son static runs before allocation. User didn't have Son static, so we proceed.
-
         {
             desc: "3. 内存分配 (Allocation): 在堆中开辟空间，并**抹零** (Zeroing)",
             highlight: 'main-entry',
@@ -341,21 +328,25 @@
             highlight: 'f-ctor-print',
             action: () => log("4. Father 构造器")
         },
+        // --- 修正重点 ---
+        // 原则：谁写在前面，谁先执行。
+        // 代码中 int id = 3003 在 { code block } 之前。
         {
-            desc: "10. Son 层初始化: 执行构造代码块 (Instance Block)",
-            highlight: 's-block',
-            action: () => log("5. Son 构造代码块 (开始装修儿子层)")
-        },
-        {
-            desc: "11. Son 层初始化: 显式赋值 (id=3003, age=18)",
-            highlight: 's-field-id', // highlighting both conceptually
+            desc: "10. Son 层初始化: 显式赋值 (按源码顺序优先执行)",
+            highlight: 's-field-id', // 高亮 id 和 age 所在区域
             action: () => {
                 updateVal('val-son-id', '3003', true);
                 updateVal('val-son-age', '18', true);
             }
         },
         {
-            desc: "12. Son 层初始化: 执行构造器主体",
+            desc: "11. Son 层初始化: 执行构造代码块 (按源码顺序靠后)",
+            highlight: 's-block',
+            action: () => log("5. Son 构造代码块")
+        },
+        // --- 修正结束 ---
+        {
+            desc: "12. Son 层初始化: 执行构造器主体 (最后一步)",
             highlight: 's-ctor-print',
             action: () => log("6. Son 构造器 (装修完毕)")
         },

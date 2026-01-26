@@ -10,24 +10,13 @@ public class Switch02 {
 
         switch(ch) {
             case 'a':
-                ch -=32;
-                System.out.println("字母a转化为大写" + ch);
-                break;
             case 'b':
-                ch -=32;
-                System.out.println("字母b转化为大写" + ch);
-                break;
             case 'c':
-                ch -=32;
-                System.out.println("字母c转化为大写" + ch);
-                break;
             case 'd':
-                ch -=32;
-                System.out.println("字母d转化为大写" + ch);
-                break;
             case 'e':
+                System.out.print("字母" + ch + "转化为大写为: ");
                 ch -=32;
-                System.out.println("字母e转化为大写" + ch);
+                System.out.println(ch);
                 break;
             default:
                 System.out.println("other");

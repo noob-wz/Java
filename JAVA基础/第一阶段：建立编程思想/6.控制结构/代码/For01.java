@@ -3,15 +3,17 @@
 
 public class For01 {
     public static void main(String[] args) {
-        int sum = 0, n = 0;
+        int sum = 0;
+        int count = 0;
+
         for(int i = 1; i <= 100; i++) {
             if (i % 9 == 0) {
-                n++;
+                count++;
                 sum += i;
-                System.out.println("i=" + i + " 是9的倍数");
+                System.out.println("第" + count + "个9的倍数是：" + i);
             }
         }
-        System.out.println("1-100中是9的倍数的数有：" + n +"个，并且它们总和为：" + sum);
+        System.out.println("1-100中是9的倍数的数有：" + count +"个，并且它们总和为：" + sum);
 
     }
 }

@@ -7,12 +7,23 @@ public class Array01 {
     public static void main(String[] args) {
         
         char[] arr = new char[26];
-        arr[0] = 'A';
 
-        for (int i = 0; i < 26; i++) {
-            arr[i] = (char)('A' + i); // 整型变量不可以赋值给字符型变量
-            System.out.print(arr[i] + " ");
+        // 循环体内字符串拼接使用 StringBuilder，而不使用 + ，因为加号运行期会创建新空间
+        StringBuilder sb = new StringBuilder();
+
+        for (int i = 0; i < arr.length; i++) {
+
+            arr[i] = (char)('A' + i);
+            sb.append(arr[i]).append(" ");
         }
+
+        System.out.println(sb.toString());
 
     }
 }
+
+/* 输出结果：
+*************************************
+A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+*************************************
+*/
