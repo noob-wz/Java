@@ -10,7 +10,7 @@ public class Constructor02 {
 
 }
 
-public class DatabaseConfig {
+class DatabaseConfig {
     // 1. 加 final：一旦赋值，终身不改（真正不可变）
     // 如果仅仅是用private，还是可以通过 setter 方法来更改
     private final String host;
@@ -24,7 +24,7 @@ public class DatabaseConfig {
         if (port < 0 || port > 65535) {
             throw new IllegalArgumentException("端口异常: " + port);
         }
-        if (host == null || host.isBlank()) {
+        if (host == null || host.toString() == "") {
             throw new IllegalArgumentException("Host 不能为空");
         }
 
