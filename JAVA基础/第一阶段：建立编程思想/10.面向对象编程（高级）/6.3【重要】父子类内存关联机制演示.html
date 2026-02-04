@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java父子类内存关联可视化</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #0d1117;
+            --bg-darker: #010409;
+            --bg-card: #161b22;
+            --bg-elevated: #1c2128;
+            --border: #30363d;
+
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+
+            --blue: #58a6ff;
+            --purple: #bc8cff;
+            --green: #3fb950;
+            --orange: #f78166;
+            --yellow: #d29922;
+            --red: #ff7b72;
+            --pink: #ff80cc;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-darker);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .header {
+            background: var(--bg-dark);
+            border-bottom: 1px solid var(--border);
+            padding: 2rem;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(120deg, var(--blue), var(--purple), var(--pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .controls {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 2rem auto;
+            max-width: 1400px;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            justify-content: center;
+        }
+
+        button {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            background: var(--bg-dark);
+            border-color: var(--blue);
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--blue);
+            color: var(--bg-dark);
+            border-color: var(--blue);
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .step-info {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border-left: 4px solid var(--blue);
+        }
+
+        .step-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--blue);
+            margin-bottom: 1rem;
+        }
+
+        .step-description {
+            color: var(--text-secondary);
+            line-height: 1.8;
+        }
+
+        .memory-view {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .memory-region {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            min-height: 400px;
+        }
+
+        .region-header {
+            background: var(--bg-elevated);
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .region-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .icon-metaspace {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .icon-heap {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+        }
+
+        .icon-instance {
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+        }
+
+        .region-title {
+            font-weight: 600;
+            font-size: 1.125rem;
+        }
+
+        .region-content {
+            padding: 1.5rem;
+        }
+
+        .klass-object {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            border: 2px solid rgba(102, 126, 234, 0.4);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            position: relative;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .klass-object.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .klass-header {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            color: var(--purple);
+            font-size: 1.125rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .klass-field {
+            background: var(--bg-elevated);
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .field-name {
+            color: var(--blue);
+            white-space: nowrap;
+        }
+
+        .field-value {
+            color: var(--text-secondary);
+            margin-left: auto;
+            white-space: nowrap;
+        }
+
+        .class-object {
+            background: linear-gradient(135deg, rgba(240, 147, 251, 0.1), rgba(245, 87, 108, 0.1));
+            border: 2px solid rgba(240, 147, 251, 0.4);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .class-object.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .class-header {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            color: var(--pink);
+            font-size: 1.125rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(240, 147, 251, 0.3);
+        }
+
+        .instance-object {
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.1), rgba(0, 242, 254, 0.1));
+            border: 2px solid rgba(79, 172, 254, 0.4);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            opacity: 0;
+            transform: scale(0.9);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .instance-object.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .instance-header {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            color: var(--blue);
+            font-size: 1.125rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(79, 172, 254, 0.3);
+        }
+
+        .vtable {
+            background: var(--bg-elevated);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .vtable-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--yellow);
+            margin-bottom: 0.75rem;
+        }
+
+        .vtable-entry {
+            padding: 0.5rem;
+            background: var(--bg-dark);
+            border-radius: 4px;
+            margin-bottom: 0.25rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .vtable-index {
+            color: var(--text-muted);
+        }
+
+        .vtable-method {
+            color: var(--green);
+        }
+
+        .vtable-method.overridden {
+            color: var(--orange);
+            font-weight: 600;
+        }
+
+        .arrow {
+            fill: none;
+            stroke: var(--blue);
+            stroke-width: 2;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .arrow.visible {
+            opacity: 0.6;
+        }
+
+        .arrow-label {
+            fill: var(--blue);
+            font-size: 12px;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .arrow-label.visible {
+            opacity: 1;
+        }
+
+        .highlight {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(88, 166, 255, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 0 20px rgba(88, 166, 255, 0);
+            }
+        }
+
+        .legend {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .legend-title {
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--blue);
+        }
+
+        .legend-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .legend-box {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+
+        .code-example {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .code-example pre {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            line-height: 1.6;
+            overflow-x: auto;
+        }
+
+        @media (max-width: 1200px) {
+            .memory-view {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>Java 父子类内存关联可视化</h1>
+    <p class="subtitle">深度剖析继承机制在JVM中的实现</p>
+</div>
+
+<div class="controls">
+    <button id="resetBtn">↺ 重置</button>
+    <button id="prevBtn">◀ 上一步</button>
+    <button id="playBtn" class="btn-primary">
+        <span id="playIcon">▶</span> <span id="playText">播放</span>
+    </button>
+    <button id="nextBtn">下一步 ▶</button>
+    <select id="speedSelect">
+        <option value="2000">慢速</option>
+        <option value="1500" selected>正常</option>
+        <option value="800">快速</option>
+    </select>
+</div>
+
+<div class="container">
+    <div class="step-info">
+        <div class="step-title" id="stepTitle">准备开始</div>
+        <div class="step-description" id="stepDescription">
+            点击播放按钮，观察父类Parent和子类Child在类加载过程中的内存关联建立过程。
+        </div>
+        <div class="code-example" id="codeExample"></div>
+    </div>
+
+    <div class="memory-view">
+        <div class="memory-region">
+            <div class="region-header">
+                <div class="region-icon icon-metaspace">🗄️</div>
+                <div class="region-title">元空间 (Metaspace)</div>
+            </div>
+            <div class="region-content" id="metaspaceContent">
+                <div class="empty-state">等待类加载...</div>
+            </div>
+        </div>
+
+        <div class="memory-region">
+            <div class="region-header">
+                <div class="region-icon icon-heap">💎</div>
+                <div class="region-title">堆 (Heap) - Class对象</div>
+            </div>
+            <div class="region-content" id="heapContent">
+                <div class="empty-state">等待Class对象创建...</div>
+            </div>
+        </div>
+
+        <div class="memory-region">
+            <div class="region-header">
+                <div class="region-icon icon-instance">📦</div>
+                <div class="region-title">堆 (Heap) - 实例对象</div>
+            </div>
+            <div class="region-content" id="instanceContent">
+                <div class="empty-state">等待对象实例化...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-title">图例说明</div>
+        <div class="legend-items">
+            <div class="legend-item">
+                <div class="legend-box" style="background: linear-gradient(135deg, #667eea, #764ba2);"></div>
+                <span>InstanceKlass（C++类元数据）</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box" style="background: linear-gradient(135deg, #f093fb, #f5576c);"></div>
+                <span>Class对象（Java层面，java.lang.Class）</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box" style="background: linear-gradient(135deg, #4facfe, #00f2fe);"></div>
+                <span>对象实例</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box" style="background: var(--blue);"></div>
+                <span>关联箭头（_super / superclass / Klass Pointer / mirror）</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box" style="background: var(--orange);"></div>
+                <span>覆盖的方法（Override）</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box" style="background: var(--green);"></div>
+                <span>继承的方法</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<svg id="connectionSvg" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50;">
+    <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <polygon points="0 0, 10 3, 0 6" fill="var(--blue)" />
+        </marker>
+    </defs>
+</svg>
+
+<script>
+    const steps = [
+        {
+            title: "初始状态",
+            description: "程序启动前，所有类都未加载。我们将要加载Parent类和Child类，并观察它们在内存中的关联。",
+            code: `class Parent {
+static int parentStatic = 100;
+int parentInstance = 200;
+
+public void show() {
+    System.out.println("Parent");
+}
+}
+
+class Child extends Parent {
+static int childStatic = 300;
+int childInstance = 400;
+
+@Override
+public void show() {
+    System.out.println("Child");
+}
+}`,
+            metaspace: [],
+            heap: [],
+            instance: [],
+            arrows: []
+        },
+        {
+            title: "步骤1：加载Parent类 - 创建InstanceKlass",
+            description: "JVM首先在元空间（Metaspace）创建Parent类的InstanceKlass结构。这是C++层面的类元数据，包含类的所有结构信息。",
+            code: `// C++ 层面（简化）
+class InstanceKlass {
+InstanceKlass* _super;  // → Object.InstanceKlass
+Array<Method*>* _methods;
+klassVtable _vtable;
+// ...
+}`,
+            metaspace: [
+                {
+                    name: 'Parent.InstanceKlass',
+                    fields: [
+                        { name: '_super', value: '→ Object' },
+                        { name: '_methods', value: '[show(), ...]' },
+                        { name: '_fields', value: '[parentStatic, parentInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Parent.show()' }
+                    ]
+                }
+            ],
+            heap: [],
+            instance: [],
+            arrows: []
+        },
+        {
+            title: "步骤2：创建Parent.class对象",
+            description: "在堆中创建Parent类的java.lang.Class对象。这是Java层面的类对象，包含superclass字段指向父类（Object.class），以及静态变量。",
+            code: `// Java 层面
+class Class<T> {
+Class<? super T> superclass;  // → Object.class
+// ... 其他字段
+}
+
+// Parent.class 对象在堆中
+Parent.class.superclass = Object.class
+Parent.class.parentStatic = 100`,
+            metaspace: [
+                {
+                    name: 'Parent.InstanceKlass',
+                    fields: [
+                        { name: '_super', value: '→ Object' },
+                        { name: '_methods', value: '[show(), ...]' },
+                        { name: '_fields', value: '[parentStatic, parentInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Parent.show()' }
+                    ]
+                }
+            ],
+            heap: [
+                {
+                    name: 'Parent.class',
+                    fields: [
+                        { name: 'superclass', value: '→ Object.class' },
+                        { name: 'parentStatic', value: '100' },
+                        { name: 'name', value: '"Parent"' }
+                    ]
+                }
+            ],
+            instance: [],
+            arrows: []
+        },
+        {
+            title: "步骤3：加载Child类 - 创建InstanceKlass",
+            description: "在元空间创建Child类的InstanceKlass。注意：_super字段指向Parent.InstanceKlass，建立C++层面的继承关联。",
+            code: `// C++ 层面
+Child.InstanceKlass {
+_super = Parent.InstanceKlass  // ⭐ 关键关联
+_methods = [show(重写), childMethod(), ...]
+_vtable = 继承自Parent的vtable
+}`,
+            metaspace: [
+                {
+                    name: 'Parent.InstanceKlass',
+                    fields: [
+                        { name: '_super', value: '→ Object' },
+                        { name: '_methods', value: '[show(), ...]' },
+                        { name: '_fields', value: '[parentStatic, parentInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Parent.show()' }
+                    ]
+                },
+                {
+                    name: 'Child.InstanceKlass',
+                    highlight: true,
+                    fields: [
+                        { name: '_super', value: '→ Parent', highlight: true },
+                        { name: '_methods', value: '[show(), childMethod(), ...]' },
+                        { name: '_fields', value: '[childStatic, childInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Child.show()', overridden: true },
+                        { index: 11, method: 'Child.childMethod()' }
+                    ]
+                }
+            ],
+            heap: [
+                {
+                    name: 'Parent.class',
+                    fields: [
+                        { name: 'superclass', value: '→ Object.class' },
+                        { name: 'parentStatic', value: '100' },
+                        { name: 'name', value: '"Parent"' }
+                    ]
+                }
+            ],
+            instance: [],
+            arrows: [
+                { from: 'Child.InstanceKlass', to: 'Parent.InstanceKlass', label: '_super' }
+            ]
+        },
+        {
+            title: "步骤4：创建Child.class对象",
+            description: "在堆中创建Child类的java.lang.Class对象。superclass字段指向Parent.class，建立Java层面的继承关联。",
+            code: `// Java 层面
+Child.class {
+superclass = Parent.class  // ⭐ 关键关联
+childStatic = 300
+name = "Child"
+}
+
+// 反射访问
+Child.class.getSuperclass() == Parent.class  // true`,
+            metaspace: [
+                {
+                    name: 'Parent.InstanceKlass',
+                    fields: [
+                        { name: '_super', value: '→ Object' },
+                        { name: '_methods', value: '[show(), ...]' },
+                        { name: '_fields', value: '[parentStatic, parentInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Parent.show()' }
+                    ]
+                },
+                {
+                    name: 'Child.InstanceKlass',
+                    fields: [
+                        { name: '_super', value: '→ Parent' },
+                        { name: '_methods', value: '[show(), childMethod(), ...]' },
+                        { name: '_fields', value: '[childStatic, childInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Child.show()', overridden: true },
+                        { index: 11, method: 'Child.childMethod()' }
+                    ]
+                }
+            ],
+            heap: [
+                {
+                    name: 'Parent.class',
+                    fields: [
+                        { name: 'superclass', value: '→ Object.class' },
+                        { name: 'parentStatic', value: '100' },
+                        { name: 'name', value: '"Parent"' }
+                    ]
+                },
+                {
+                    name: 'Child.class',
+                    highlight: true,
+                    fields: [
+                        { name: 'superclass', value: '→ Parent.class', highlight: true },
+                        { name: 'childStatic', value: '300' },
+                        { name: 'name', value: '"Child"' }
+                    ]
+                }
+            ],
+            instance: [],
+            arrows: [
+                { from: 'Child.InstanceKlass', to: 'Parent.InstanceKlass', label: '_super' },
+                { from: 'Child.class', to: 'Parent.class', label: 'superclass' }
+            ]
+        },
+        {
+            title: "步骤5：虚方法表（vtable）的继承",
+            description: "Child的vtable继承自Parent。注意索引10的方法：Parent中是Parent.show()，Child中被覆盖为Child.show()。这是多态的关键！",
+            code: `// vtable 对比
+Parent.vtable[10] = Parent.show()
+Child.vtable[10]  = Child.show()  // 覆盖！
+
+// 方法调用
+Parent obj = new Child();
+obj.show();  // invokevirtual
+
+// 运行时查找：
+// 1. 获取obj的实际类型 → Child
+// 2. 在Child.vtable中查找 → vtable[10]
+// 3. 执行 Child.show()  // 多态！`,
+            metaspace: [
+                {
+                    name: 'Parent.InstanceKlass',
+                    fields: [
+                        { name: '_super', value: '→ Object' },
+                        { name: '_methods', value: '[show(), ...]' },
+                        { name: '_fields', value: '[parentStatic, parentInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Parent.show()', highlight: true }
+                    ]
+                },
+                {
+                    name: 'Child.InstanceKlass',
+                    fields: [
+                        { name: '_super', value: '→ Parent' },
+                        { name: '_methods', value: '[show(), childMethod(), ...]' },
+                        { name: '_fields', value: '[childStatic, childInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Child.show()', overridden: true, highlight: true },
+                        { index: 11, method: 'Child.childMethod()' }
+                    ]
+                }
+            ],
+            heap: [
+                {
+                    name: 'Parent.class',
+                    fields: [
+                        { name: 'superclass', value: '→ Object.class' },
+                        { name: 'parentStatic', value: '100' },
+                        { name: 'name', value: '"Parent"' }
+                    ]
+                },
+                {
+                    name: 'Child.class',
+                    fields: [
+                        { name: 'superclass', value: '→ Parent.class' },
+                        { name: 'childStatic', value: '300' },
+                        { name: 'name', value: '"Child"' }
+                    ]
+                }
+            ],
+            instance: [],
+            arrows: [
+                { from: 'Child.InstanceKlass', to: 'Parent.InstanceKlass', label: '_super' },
+                { from: 'Child.class', to: 'Parent.class', label: 'superclass' }
+            ]
+        },
+
+        /* ✅ 修正版：步骤6（Klass Pointer 指向元空间 InstanceKlass；Class 是 mirror） */
+        {
+            title: "步骤6：创建Child实例 - 字段布局（修正版）",
+            description: "创建Child对象实例。注意：实例包含完整继承链的所有实例变量。父类字段在前，子类字段在后。对象头中保存的是Klass指针（类元数据指针），指向元空间中的Child.InstanceKlass，而不是指向堆中的Child.class。",
+            code: `// 对象实例的内存布局（HotSpot 语义化表达）
+Child实例对象 {
+对象头: {
+    Mark Word (8字节)
+    Klass Pointer → Child.InstanceKlass (Metaspace)  // ⭐ 不是 → Child.class
+}
+
+// 父类字段（示例偏移量）
+parentInstance = 200
+
+// 子类字段（示例偏移量）
+childInstance = 400
+
+对齐填充
+}`,
+            metaspace: [
+                {
+                    name: 'Parent.InstanceKlass',
+                    fields: [
+                        { name: '_super', value: '→ Object' },
+                        { name: '_methods', value: '[show(), ...]' },
+                        { name: '_fields', value: '[parentStatic, parentInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Parent.show()' }
+                    ]
+                },
+                {
+                    name: 'Child.InstanceKlass',
+                    fields: [
+                        { name: '_super', value: '→ Parent' },
+                        { name: '_methods', value: '[show(), childMethod(), ...]' },
+                        { name: '_fields', value: '[childStatic, childInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Child.show()', overridden: true },
+                        { index: 11, method: 'Child.childMethod()' }
+                    ]
+                }
+            ],
+            heap: [
+                {
+                    name: 'Parent.class',
+                    fields: [
+                        { name: 'superclass', value: '→ Object.class' },
+                        { name: 'parentStatic', value: '100' },
+                        { name: 'name', value: '"Parent"' }
+                    ]
+                },
+                {
+                    name: 'Child.class',
+                    fields: [
+                        { name: 'superclass', value: '→ Parent.class' },
+                        { name: 'childStatic', value: '300' },
+                        { name: 'name', value: '"Child"' },
+                        { name: 'mirror/metadata', value: '↔ Child.InstanceKlass', highlight: true }
+                    ]
+                }
+            ],
+            instance: [
+                {
+                    name: 'Child@instance',
+                    highlight: true,
+                    fields: [
+                        { name: '对象头.Klass指针', value: '→ Child.InstanceKlass', highlight: true },
+                        { name: 'parentInstance', value: '200', comment: '来自Parent' },
+                        { name: 'childInstance', value: '400', comment: '来自Child' }
+                    ]
+                }
+            ],
+            arrows: [
+                { from: 'Child.InstanceKlass', to: 'Parent.InstanceKlass', label: '_super' },
+                { from: 'Child.class', to: 'Parent.class', label: 'superclass' },
+
+                // ✅ 关键修正：实例对象头指向元空间的InstanceKlass
+                { from: 'Child@instance', to: 'Child.InstanceKlass', label: 'Klass Pointer' },
+
+                // ✅ 更完整：Class对象与元数据的 mirror 关系
+                { from: 'Child.class', to: 'Child.InstanceKlass', label: 'mirror' }
+            ]
+        },
+
+        /* ✅ 修正版：完整关联图（补齐 KlassPointer + mirror） */
+        {
+            title: "完整关联图（修正版）",
+            description: "总结：父子类在三个层面建立关联。① 元数据层：InstanceKlass._super指针（元空间）。② Java反射层：Class.superclass字段（堆中的java.lang.Class对象）。③ 实例层：对象头里是Klass Pointer，直接指向元空间的InstanceKlass；java.lang.Class对象作为Klass的mirror与其关联。",
+            code: `// 三层关联总结（更贴近 HotSpot 语义）
+
+// 1) 元数据层（Metaspace，C++/JVM层）
+Child.InstanceKlass._super → Parent.InstanceKlass
+
+// 2) Java 反射层（Heap中的 java.lang.Class）
+Child.class.superclass → Parent.class
+
+// 3) 实例层（Heap中的对象实例）
+child实例.对象头.KlassPointer → Child.InstanceKlass   // ⭐ 不是 → Child.class
+
+// 4) mirror 关系（Class对象与元数据的关联）
+Child.class ↔ Child.InstanceKlass
+
+// 方法调用（多态，概念化链路）
+child实例 → Child.InstanceKlass → vtable[index] → 实际方法`,
+            metaspace: [
+                {
+                    name: 'Parent.InstanceKlass',
+                    fields: [
+                        { name: '_super', value: '→ Object' },
+                        { name: '_methods', value: '[show(), ...]' },
+                        { name: '_fields', value: '[parentStatic, parentInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Parent.show()' }
+                    ]
+                },
+                {
+                    name: 'Child.InstanceKlass',
+                    fields: [
+                        { name: '_super', value: '→ Parent', highlight: true },
+                        { name: '_methods', value: '[show(), childMethod(), ...]' },
+                        { name: '_fields', value: '[childStatic, childInstance]' }
+                    ],
+                    vtable: [
+                        { index: 0, method: 'Object.toString()' },
+                        { index: 1, method: 'Object.equals()' },
+                        { index: 2, method: 'Object.hashCode()' },
+                        { index: 10, method: 'Child.show()', overridden: true },
+                        { index: 11, method: 'Child.childMethod()' }
+                    ]
+                }
+            ],
+            heap: [
+                {
+                    name: 'Parent.class',
+                    fields: [
+                        { name: 'superclass', value: '→ Object.class' },
+                        { name: 'parentStatic', value: '100' },
+                        { name: 'name', value: '"Parent"' }
+                    ]
+                },
+                {
+                    name: 'Child.class',
+                    fields: [
+                        { name: 'superclass', value: '→ Parent.class', highlight: true },
+                        { name: 'childStatic', value: '300' },
+                        { name: 'name', value: '"Child"' },
+                        { name: 'mirror/metadata', value: '↔ Child.InstanceKlass', highlight: true }
+                    ]
+                }
+            ],
+            instance: [
+                {
+                    name: 'Child@instance',
+                    fields: [
+                        { name: '对象头.Klass指针', value: '→ Child.InstanceKlass', highlight: true },
+                        { name: 'parentInstance', value: '200', comment: '来自Parent' },
+                        { name: 'childInstance', value: '400', comment: '来自Child' }
+                    ]
+                }
+            ],
+            arrows: [
+                { from: 'Child.InstanceKlass', to: 'Parent.InstanceKlass', label: '_super' },
+                { from: 'Child.class', to: 'Parent.class', label: 'superclass' },
+                { from: 'Child@instance', to: 'Child.InstanceKlass', label: 'Klass Pointer' },
+                { from: 'Child.class', to: 'Child.InstanceKlass', label: 'mirror' }
+            ]
+        }
+    ];
+
+    let currentStep = 0;
+    let isPlaying = false;
+    let playTimer = null;
+    let playSpeed = 1500;
+
+    function renderStep() {
+        const step = steps[currentStep];
+
+        // 更新说明
+        document.getElementById('stepTitle').textContent = step.title;
+        document.getElementById('stepDescription').textContent = step.description;
+        document.getElementById('codeExample').innerHTML = `<pre>${escapeHtml(step.code)}</pre>`;
+
+        // 更新元空间
+        renderMetaspace(step.metaspace);
+
+        // 更新堆
+        renderHeap(step.heap);
+
+        // 更新实例
+        renderInstance(step.instance);
+
+        // 更新箭头（延迟渲染）
+        setTimeout(() => renderArrows(step.arrows), 500);
+
+        // 更新按钮
+        updateButtons();
+    }
+
+    function renderMetaspace(items) {
+        const container = document.getElementById('metaspaceContent');
+        if (items.length === 0) {
+            container.innerHTML = '<div class="empty-state">等待类加载...</div>';
+            return;
+        }
+
+        const html = items.map(item => {
+            const fieldsHtml = item.fields.map(f => `
+                <div class="klass-field ${f.highlight ? 'highlight' : ''}">
+                    <span class="field-name">${f.name}</span>
+                    <span class="field-value">${f.value}</span>
+                </div>
+            `).join('');
+
+            const vtableHtml = item.vtable ? `
+                <div class="vtable">
+                    <div class="vtable-title">虚方法表 (vtable)</div>
+                    ${item.vtable.map(v => `
+                        <div class="vtable-entry ${v.highlight ? 'highlight' : ''}">
+                            <span class="vtable-index">[${v.index}]</span>
+                            <span class="vtable-method ${v.overridden ? 'overridden' : ''}">${v.method}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : '';
+
+            return `
+                <div class="klass-object ${item.highlight ? 'highlight' : ''}" data-id="${item.name}">
+                    <div class="klass-header">${item.name}</div>
+                    ${fieldsHtml}
+                    ${vtableHtml}
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+
+        // 触发动画
+        setTimeout(() => {
+            container.querySelectorAll('.klass-object').forEach(el => {
+                el.classList.add('visible');
+            });
+        }, 10);
+    }
+
+    function renderHeap(items) {
+        const container = document.getElementById('heapContent');
+        if (items.length === 0) {
+            container.innerHTML = '<div class="empty-state">等待Class对象创建...</div>';
+            return;
+        }
+
+        const html = items.map(item => {
+            const fieldsHtml = item.fields.map(f => `
+                <div class="klass-field ${f.highlight ? 'highlight' : ''}">
+                    <span class="field-name">${f.name}</span>
+                    <span class="field-value">${f.value}</span>
+                </div>
+            `).join('');
+
+            return `
+                <div class="class-object ${item.highlight ? 'highlight' : ''}" data-id="${item.name}">
+                    <div class="class-header">${item.name}</div>
+                    ${fieldsHtml}
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+
+        setTimeout(() => {
+            container.querySelectorAll('.class-object').forEach(el => {
+                el.classList.add('visible');
+            });
+        }, 10);
+    }
+
+    function renderInstance(items) {
+        const container = document.getElementById('instanceContent');
+        if (items.length === 0) {
+            container.innerHTML = '<div class="empty-state">等待对象实例化...</div>';
+            return;
+        }
+
+        const html = items.map(item => {
+            const fieldsHtml = item.fields.map(f => `
+                <div class="klass-field ${f.highlight ? 'highlight' : ''}">
+                    <span class="field-name">${f.name}</span>
+                    <span class="field-value">${f.value}</span>
+                    ${f.comment ? `<span class="field-value" style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;">${f.comment}</span>` : ''}
+                </div>
+            `).join('');
+
+            return `
+                <div class="instance-object ${item.highlight ? 'highlight' : ''}" data-id="${item.name}">
+                    <div class="instance-header">${item.name}</div>
+                    ${fieldsHtml}
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+
+        setTimeout(() => {
+            container.querySelectorAll('.instance-object').forEach(el => {
+                el.classList.add('visible');
+            });
+        }, 10);
+    }
+
+    function renderArrows(arrows) {
+        const svg = document.getElementById('connectionSvg');
+        svg.innerHTML = '<defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><polygon points="0 0, 10 3, 0 6" fill="#58a6ff" /></marker></defs>';
+
+        arrows.forEach(arrow => {
+            const fromEl = document.querySelector(`[data-id="${arrow.from}"]`);
+            const toEl = document.querySelector(`[data-id="${arrow.to}"]`);
+
+            if (fromEl && toEl) {
+                const fromRect = fromEl.getBoundingClientRect();
+                const toRect = toEl.getBoundingClientRect();
+
+                const x1 = fromRect.left + fromRect.width / 2;
+                const y1 = fromRect.top + fromRect.height / 2;
+                const x2 = toRect.left + toRect.width / 2;
+                const y2 = toRect.top + toRect.height / 2;
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', `M ${x1} ${y1} Q ${(x1+x2)/2} ${(y1+y2)/2-50} ${x2} ${y2}`);
+                path.setAttribute('class', 'arrow');
+                path.setAttribute('marker-end', 'url(#arrowhead)');
+                svg.appendChild(path);
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', (x1+x2)/2);
+                text.setAttribute('y', (y1+y2)/2 - 55);
+                text.setAttribute('class', 'arrow-label');
+                text.setAttribute('text-anchor', 'middle');
+                text.textContent = arrow.label;
+                svg.appendChild(text);
+
+                setTimeout(() => {
+                    path.classList.add('visible');
+                    text.classList.add('visible');
+                }, 10);
+            }
+        });
+    }
+
+    function updateButtons() {
+        document.getElementById('prevBtn').disabled = currentStep === 0;
+        document.getElementById('nextBtn').disabled = currentStep === steps.length - 1;
+    }
+
+    function goToStep(step) {
+        currentStep = Math.max(0, Math.min(step, steps.length - 1));
+        renderStep();
+    }
+
+    function nextStep() {
+        if (currentStep < steps.length - 1) {
+            goToStep(currentStep + 1);
+        } else {
+            stopPlay();
+        }
+    }
+
+    function prevStep() {
+        if (currentStep > 0) {
+            goToStep(currentStep - 1);
+        }
+    }
+
+    function togglePlay() {
+        if (isPlaying) {
+            stopPlay();
+        } else {
+            startPlay();
+        }
+    }
+
+    function startPlay() {
+        isPlaying = true;
+        document.getElementById('playIcon').textContent = '⏸';
+        document.getElementById('playText').textContent = '暂停';
+
+        playTimer = setInterval(() => {
+            nextStep();
+        }, playSpeed);
+    }
+
+    function stopPlay() {
+        isPlaying = false;
+        document.getElementById('playIcon').textContent = '▶';
+        document.getElementById('playText').textContent = '播放';
+        if (playTimer) {
+            clearInterval(playTimer);
+            playTimer = null;
+        }
+    }
+
+    function reset() {
+        stopPlay();
+        goToStep(0);
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // 事件监听
+    document.getElementById('playBtn').addEventListener('click', togglePlay);
+    document.getElementById('nextBtn').addEventListener('click', () => {
+        stopPlay();
+        nextStep();
+    });
+    document.getElementById('prevBtn').addEventListener('click', () => {
+        stopPlay();
+        prevStep();
+    });
+    document.getElementById('resetBtn').addEventListener('click', reset);
+    document.getElementById('speedSelect').addEventListener('change', (e) => {
+        playSpeed = parseInt(e.target.value);
+        if (isPlaying) {
+            stopPlay();
+            startPlay();
+        }
+    });
+
+    // 键盘快捷键
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            togglePlay();
+        } else if (e.code === 'ArrowRight') {
+            e.preventDefault();
+            stopPlay();
+            nextStep();
+        } else if (e.code === 'ArrowLeft') {
+            e.preventDefault();
+            stopPlay();
+            prevStep();
+        }
+    });
+
+    // 窗口大小改变时重新渲染箭头
+    window.addEventListener('resize', () => {
+        if (steps[currentStep].arrows) {
+            renderArrows(steps[currentStep].arrows);
+        }
+    });
+
+    // 初始化
+    renderStep();
+</script>
+</body>
+</html>
+

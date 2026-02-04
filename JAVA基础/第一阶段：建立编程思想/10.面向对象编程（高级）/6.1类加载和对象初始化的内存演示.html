@@ -1,0 +1,1935 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java类加载与对象初始化 - 可视化演示系统（InstanceKlass / Class / Klass Pointer 关联版）</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-darker: #010409;
+            --bg-card: #161b22;
+            --bg-elevated: #1c2128;
+            --border-subtle: #30363d;
+            --border-muted: #21262d;
+
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+
+            --accent-blue: #58a6ff;
+            --accent-purple: #bc8cff;
+            --accent-green: #3fb950;
+            --accent-orange: #f78166;
+            --accent-yellow: #d29922;
+            --accent-red: #ff7b72;
+
+            --shadow-sm: 0 0 0 1px var(--border-subtle);
+            --shadow-md: 0 3px 6px rgba(0,0,0,0.3);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-darker);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Header Section */
+        .header {
+            background: linear-gradient(180deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 2rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        .title-section { text-align: center; margin-bottom: 2rem; }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: linear-gradient(120deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle { color: var(--text-secondary); font-size: 1rem; }
+
+        .legend {
+            margin-top: 0.75rem;
+            display: flex;
+            justify-content: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 999px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+        }
+        .legend-icon { font-size: 0.95rem; }
+
+        /* Control Panel */
+        .control-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 0;
+        }
+
+        .controls-row {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .btn-group { display: flex; gap: 0.5rem; }
+
+        button {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            padding: 0.625rem 1.25rem;
+            border-radius: 6px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        button:hover:not(:disabled) {
+            background: var(--bg-dark);
+            border-color: var(--accent-blue);
+        }
+
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            color: var(--bg-dark);
+            border-color: var(--accent-blue);
+        }
+
+        .btn-primary:hover:not(:disabled) { background: #4493e6; border-color: #4493e6; }
+
+        /* Progress Section */
+        .progress-section { flex: 1; }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .current-phase { color: var(--accent-blue); font-weight: 600; }
+        .step-count { color: var(--text-muted); }
+
+        .progress-bar {
+            height: 6px;
+            background: var(--bg-elevated);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
+        }
+
+        .timeline { margin-top: 0.75rem; position: relative; height: 24px; }
+        .timeline-track {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 100%; height: 2px; background: var(--border-subtle);
+        }
+        .timeline-markers { position: relative; display: flex; justify-content: space-between; width: 100%; }
+
+        .timeline-marker {
+            width: 12px; height: 12px; border-radius: 50%;
+            background: var(--bg-elevated);
+            border: 2px solid var(--border-subtle);
+            cursor: pointer; transition: all 0.2s; position: relative;
+        }
+
+        .timeline-marker:hover { transform: scale(1.3); border-color: var(--accent-blue); }
+        .timeline-marker.completed { background: var(--accent-green); border-color: var(--accent-green); }
+        .timeline-marker.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 4px rgba(88, 166, 255, 0.2);
+            transform: scale(1.5);
+        }
+        .timeline-marker.key-point::after {
+            content: '⭐'; position: absolute; top: -20px; left: 50%;
+            transform: translateX(-50%); font-size: 10px;
+        }
+
+        /* Main Content */
+        .main-container { max-width: 1600px; margin: 0 auto; padding: 2rem; }
+        .content-grid { display: grid; grid-template-columns: 600px 1fr; gap: 2rem; margin-bottom: 2rem; }
+
+        /* Code Panel */
+        .code-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            overflow: hidden;
+            position: sticky;
+            top: 180px;
+            height: fit-content;
+            max-height: calc(100vh - 200px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .code-header {
+            background: var(--bg-elevated);
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .window-controls { display: flex; gap: 0.5rem; }
+        .window-btn { width: 12px; height: 12px; border-radius: 50%; }
+        .btn-close { background: #ff5f56; }
+        .btn-minimize { background: #ffbd2e; }
+        .btn-maximize { background: #27c93f; }
+
+        .file-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-left: auto;
+        }
+
+        .code-content {
+            overflow-y: auto;
+            padding: 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            line-height: 1.8;
+            flex: 1;
+        }
+
+        .code-line {
+            display: flex;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .line-num {
+            color: var(--text-muted);
+            width: 3rem;
+            text-align: right;
+            user-select: none;
+            flex-shrink: 0;
+            padding-right: 1.5rem;
+        }
+
+        .line-code { color: var(--text-primary); white-space: pre; }
+
+        .code-line.active {
+            background: rgba(88, 166, 255, 0.15);
+            border-left: 3px solid var(--accent-blue);
+            box-shadow: 0 0 20px rgba(88, 166, 255, 0.1);
+            margin-left: -0.75rem;
+            padding-left: calc(0.75rem - 3px);
+        }
+
+        .code-line.active::before {
+            content: '▶';
+            position: absolute;
+            left: -1.5rem;
+            color: var(--accent-blue);
+            font-size: 0.75rem;
+            animation: blink 1s ease-in-out infinite;
+        }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .code-line.executed { opacity: 0.4; }
+
+        /* Memory Visualization */
+        .memory-container { display: flex; flex-direction: column; gap: 1.5rem; }
+
+        .memory-region {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .memory-region.highlight {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 1px var(--accent-blue), 0 4px 12px rgba(88, 166, 255, 0.2);
+        }
+
+        .region-header {
+            background: var(--bg-elevated);
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .region-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .region-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.125rem;
+        }
+
+        .icon-metaspace { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .icon-heap { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .icon-stack { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+
+        .region-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            background: var(--bg-dark);
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .region-content { padding: 1.5rem; min-height: 120px; }
+        .empty-message { text-align: center; color: var(--text-muted); padding: 2rem; font-size: 0.875rem; }
+
+        /* Memory Objects */
+        .meta-klass {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%);
+            border: 2px solid rgba(102, 126, 234, 0.35);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .meta-klass::before {
+            content: '';
+            position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+            background: linear-gradient(180deg, #667eea, #764ba2);
+        }
+
+        .class-object {
+            background: linear-gradient(135deg, rgba(240, 147, 251, 0.1) 0%, rgba(245, 87, 108, 0.1) 100%);
+            border: 2px solid rgba(240, 147, 251, 0.3);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .class-object::before {
+            content: '';
+            position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+            background: linear-gradient(180deg, #f093fb, #f5576c);
+        }
+
+        .object-instance {
+            background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%);
+            border: 2px solid rgba(79, 172, 254, 0.3);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .object-instance::before {
+            content: '';
+            position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+            background: linear-gradient(180deg, #4facfe, #00f2fe);
+        }
+
+        .object-header {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            color: var(--accent-purple);
+            margin-bottom: 1rem;
+            font-size: 0.9375rem;
+        }
+
+        .memory-item {
+            padding: 0.75rem 1rem;
+            background: var(--bg-elevated);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 1rem;
+            align-items: center;
+            border-left: 3px solid transparent;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0;
+            transform: translateX(-10px);
+        }
+
+        .memory-item.appear { opacity: 1; transform: translateX(0); }
+
+        .memory-item.new { border-left-color: var(--accent-green); animation: flash-green 0.6s ease; }
+        .memory-item.modified { border-left-color: var(--accent-orange); animation: flash-orange 0.6s ease; }
+
+        @keyframes flash-green { 0%, 100% { background: var(--bg-elevated); } 50% { background: rgba(63, 185, 80, 0.2); } }
+        @keyframes flash-orange { 0%, 100% { background: var(--bg-elevated); } 50% { background: rgba(247, 129, 102, 0.2); } }
+
+        .item-name { font-family: 'JetBrains Mono', monospace; font-weight: 500; color: var(--accent-blue); font-size: 0.875rem; white-space: nowrap; }
+        .item-value { font-family: 'JetBrains Mono', monospace; color: var(--text-primary); font-size: 0.875rem; text-align: center; white-space: nowrap; }
+        .item-type { color: var(--text-muted); font-size: 0.75rem; text-align: right; white-space: nowrap; }
+
+        .stack-frame {
+            background: var(--bg-elevated);
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid var(--accent-blue);
+            transition: all 0.4s ease;
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        .stack-frame.appear { opacity: 1; transform: translateY(0); }
+        .stack-frame.new { animation: flash-blue 0.6s ease; }
+
+        @keyframes flash-blue { 0%, 100% { background: var(--bg-elevated); } 50% { background: rgba(88, 166, 255, 0.2); } }
+
+        .frame-name { font-family: 'JetBrains Mono', monospace; font-weight: 500; color: var(--accent-blue); margin-bottom: 0.25rem; }
+        .frame-detail { color: var(--text-secondary); font-size: 0.875rem; }
+
+        /* Description Panel */
+        .description-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 2rem;
+        }
+
+        .phase-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+
+        .phase-number {
+            width: 48px; height: 48px; border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: white; display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 1.25rem;
+        }
+
+        .phase-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            background: linear-gradient(120deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .phase-description {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.7;
+            margin-bottom: 1.5rem;
+        }
+
+        .phase-details {
+            background: var(--bg-elevated);
+            border-radius: 8px;
+            padding: 1.5rem;
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .detail-list { list-style: none; }
+        .detail-list li { padding: 0.5rem 0; color: var(--text-secondary); position: relative; padding-left: 1.5rem; }
+        .detail-list li::before { content: '→'; position: absolute; left: 0; color: var(--accent-blue); font-weight: bold; }
+
+        /* Settings Panel */
+        .settings { display: flex; align-items: center; gap: 1rem; }
+        .setting-label { color: var(--text-secondary); font-size: 0.875rem; }
+
+        select {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        select:hover { border-color: var(--accent-blue); }
+        select:focus { outline: none; border-color: var(--accent-blue); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-elevated); }
+        ::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        /* Tooltip */
+        .tooltip { position: relative; }
+        .tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            margin-bottom: 0.5rem;
+            box-shadow: var(--shadow-lg);
+        }
+        .tooltip:hover::after { opacity: 1; }
+
+        /* SVG Arrows */
+        #connectionSvg {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 80;
+        }
+        .arrow {
+            fill: none;
+            stroke: var(--accent-blue);
+            stroke-width: 2;
+            opacity: 0;
+            transition: opacity 0.35s ease;
+        }
+        .arrow.visible { opacity: 0.65; }
+        .arrow-label {
+            fill: var(--accent-blue);
+            font-size: 12px;
+            font-weight: 700;
+            opacity: 0;
+            transition: opacity 0.35s ease;
+        }
+        .arrow-label.visible { opacity: 1; }
+
+        /* Responsive */
+        @media (max-width: 1400px) {
+            .content-grid { grid-template-columns: 1fr; }
+            .code-panel { position: relative; top: 0; max-height: 600px; }
+        }
+    </style>
+</head>
+<body>
+<header class="header">
+    <div class="header-content">
+        <div class="title-section">
+            <h1>Java 类加载与对象初始化可视化</h1>
+            <p class="subtitle">✅ 已关联：InstanceKlass（元空间） ↔ Class对象（堆） ↔ 实例对象头Klass Pointer</p>
+            <div class="legend">
+                <div class="legend-item"><span class="legend-icon">✅</span>已建立/已完成</div>
+                <div class="legend-item"><span class="legend-icon">🔗</span>符号引用</div>
+                <div class="legend-item"><span class="legend-icon">⏳</span>未建立/未分配</div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <div class="controls-row">
+                <div class="btn-group">
+                    <button id="resetBtn" class="tooltip" data-tooltip="重置到开始 (R)">
+                        <span>↺</span>
+                    </button>
+                    <button id="prevBtn" class="tooltip" data-tooltip="上一步 (←)">
+                        <span>◀</span>
+                    </button>
+                    <button id="playBtn" class="btn-primary tooltip" data-tooltip="播放/暂停 (Space)">
+                        <span id="playIcon">▶</span>
+                        <span id="playText">播放</span>
+                    </button>
+                    <button id="nextBtn" class="tooltip" data-tooltip="下一步 (→)">
+                        <span>▶</span>
+                    </button>
+                </div>
+
+                <div class="progress-section">
+                    <div class="progress-info">
+                        <span class="current-phase" id="currentPhase">准备开始</span>
+                        <span class="step-count" id="stepCount">步骤 0/21</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="timeline">
+                        <div class="timeline-track"></div>
+                        <div class="timeline-markers" id="timelineMarkers"></div>
+                    </div>
+                </div>
+
+                <div class="settings">
+                    <span class="setting-label">播放速度</span>
+                    <select id="speedSelect">
+                        <option value="2000">慢速</option>
+                        <option value="1200" selected>正常</option>
+                        <option value="600">快速</option>
+                        <option value="300">极速</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="main-container">
+    <div class="content-grid">
+        <div class="code-panel">
+            <div class="code-header">
+                <div class="window-controls">
+                    <div class="window-btn btn-close"></div>
+                    <div class="window-btn btn-minimize"></div>
+                    <div class="window-btn btn-maximize"></div>
+                </div>
+                <span class="file-name">UltimateBlock.java</span>
+            </div>
+            <div class="code-content" id="codeContent"></div>
+        </div>
+
+        <div class="memory-container">
+            <div class="memory-region" id="metaspaceRegion">
+                <div class="region-header">
+                    <div class="region-title">
+                        <div class="region-icon icon-metaspace">📦</div>
+                        <span>元空间 (Metaspace)</span>
+                    </div>
+                    <span class="region-badge">Klass / InstanceKlass</span>
+                </div>
+                <div class="region-content" id="metaspaceContent">
+                    <div class="empty-message">等待类加载...</div>
+                </div>
+            </div>
+
+            <div class="memory-region" id="heapRegion">
+                <div class="region-header">
+                    <div class="region-title">
+                        <div class="region-icon icon-heap">💎</div>
+                        <span>堆 (Heap)</span>
+                    </div>
+                    <span class="region-badge">Class对象 / 实例</span>
+                </div>
+                <div class="region-content" id="heapContent">
+                    <div class="empty-message">等待对象创建...</div>
+                </div>
+            </div>
+
+            <div class="memory-region" id="stackRegion">
+                <div class="region-header">
+                    <div class="region-title">
+                        <div class="region-icon icon-stack">📚</div>
+                        <span>栈 (Stack)</span>
+                    </div>
+                    <span class="region-badge">线程私有</span>
+                </div>
+                <div class="region-content" id="stackContent">
+                    <div class="empty-message">等待方法调用...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="description-panel">
+        <div class="phase-header">
+            <div class="phase-number" id="phaseNumber">0</div>
+            <h2 class="phase-title" id="phaseTitle">准备开始演示</h2>
+        </div>
+        <p class="phase-description" id="phaseDescription">
+            点击"播放"按钮开始演示完整的Java类加载和对象初始化过程。你将看到内存的实时变化、代码的执行流程，以及关键概念的详细解释。
+        </p>
+        <div class="phase-details">
+            <ul class="detail-list" id="detailList">
+                <li>跟踪代码执行的每一步</li>
+                <li>观察三大内存区域的变化</li>
+                <li>理解静态初始化与实例初始化的顺序</li>
+                <li>掌握 &lt;clinit&gt; 与 &lt;init&gt; 的嵌套执行</li>
+                <li>✅ 看清：实例对象头的 Klass Pointer 指向 InstanceKlass（元空间）</li>
+                <li>✅ 看清：java.lang.Class 是 InstanceKlass 的 mirror（堆中）</li>
+                <li>✅ 图例：✅已建立 🔗符号引用 ⏳未建立/未分配（HotSpot视角）</li>
+            </ul>
+        </div>
+    </div>
+</main>
+
+<!-- SVG：用于画关联箭头 -->
+<svg id="connectionSvg">
+    <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <polygon points="0 0, 10 3, 0 6" fill="var(--accent-blue)"></polygon>
+        </marker>
+    </defs>
+</svg>
+
+<script>
+    // Java源代码
+    const sourceCode = `public class UltimateBlock {
+
+// 1. 静态变量 singleton
+private static UltimateBlock singleton = new UltimateBlock();
+
+// 2. 静态变量 count1
+public static int count1;
+
+// 3. 静态变量 count2
+public static int count2 = 0;
+
+// 4. 实例代码块
+{
+    count1++;
+    count2++;
+}
+
+// 5. 构造器
+private UltimateBlock() {
+    // 构造器代码
+}
+
+// 6. 静态方法
+public static UltimateBlock getInstance() {
+    return singleton;
+}
+
+public static void main(String[] args) {
+    UltimateBlock obj = UltimateBlock.getInstance();
+    System.out.println("count1=" + obj.count1);
+    System.out.println("count2=" + obj.count2);
+}
+}`;
+
+    /**
+     * ✅ 关键：统一 id 让箭头能“连起来”
+     * metaspace: "UltimateBlock.InstanceKlass"
+     * heap class: "UltimateBlock.class"
+     * heap instance: "UltimateBlock@instance"
+     */
+    const IDS = {
+        IK: "UltimateBlock.InstanceKlass",
+        CLS: "UltimateBlock.class",
+        INS: "UltimateBlock@instance"
+    };
+
+    // InstanceKlass 各阶段状态（HotSpot视角）
+    const mkField = (name, value, fieldType, status = '') => ({ name, value, fieldType, status });
+    const IK_STATE = {
+        loading: [
+            mkField("_super", "🔗 Object（符号引用）", "Klass Symbol", "new"),
+            mkField("_interfaces", "✅ []", "Array<Klass*>", "new"),
+            mkField("_fields", "✅ [singleton, count1, count2]", "Array<FieldInfo>", "new"),
+            mkField("_methods", "✅ [<clinit>, <init>, main, ...]", "Array<Method*>", "new"),
+            mkField("_constant_pool", "✅ 已加载（符号引用为主）", "ConstantPool", "new"),
+            mkField("vtable/itable", "⏳ 未建立", "Dispatch Tables", "new"),
+            mkField("field_layout", "⏳ 未计算", "Layout", "new"),
+            mkField("mirror", "✅ ↔ UltimateBlock.class", "oop (mirror)", "new"),
+            mkField("state", "已加载", "LinkState", "new")
+        ],
+        verified: [
+            mkField("_super", "🔗 Object（符号引用）", "Klass Symbol"),
+            mkField("_interfaces", "✅ []", "Array<Klass*>"),
+            mkField("_fields", "✅ [singleton, count1, count2]", "Array<FieldInfo>"),
+            mkField("_methods", "✅ [<clinit>, <init>, main, ...]", "Array<Method*>"),
+            mkField("_constant_pool", "✅ 已加载（符号引用为主）", "ConstantPool"),
+            mkField("vtable/itable", "⏳ 未建立", "Dispatch Tables"),
+            mkField("field_layout", "⏳ 未计算", "Layout"),
+            mkField("mirror", "✅ ↔ UltimateBlock.class", "oop (mirror)"),
+            mkField("verify", "✅ 通过", "Verifier", "modified"),
+            mkField("state", "已验证", "LinkState", "modified")
+        ],
+        prepared: [
+            mkField("_super", "🔗 Object（符号引用）", "Klass Symbol"),
+            mkField("_interfaces", "✅ []", "Array<Klass*>"),
+            mkField("_fields", "✅ [singleton, count1, count2]", "Array<FieldInfo>"),
+            mkField("_methods", "✅ [<clinit>, <init>, main, ...]", "Array<Method*>"),
+            mkField("_constant_pool", "✅ 已加载（符号引用为主）", "ConstantPool"),
+            mkField("vtable/itable", "⏳ 未建立", "Dispatch Tables"),
+            mkField("field_layout", "✅ 已计算", "Layout", "modified"),
+            mkField("mirror", "✅ ↔ UltimateBlock.class", "oop (mirror)"),
+            mkField("state", "准备完成", "LinkState", "modified")
+        ],
+        resolved: [
+            mkField("_super", "✅ → Object.InstanceKlass", "Klass*", "modified"),
+            mkField("_interfaces", "✅ []", "Array<Klass*>"),
+            mkField("_fields", "✅ [singleton, count1, count2]", "Array<FieldInfo>"),
+            mkField("_methods", "✅ [<clinit>, <init>, main, ...]", "Array<Method*>"),
+            mkField("_constant_pool", "✅ 部分已解析为直接引用", "ConstantPool", "modified"),
+            mkField("vtable/itable", "✅ 已构建", "Dispatch Tables", "modified"),
+            mkField("field_layout", "✅ 已计算", "Layout"),
+            mkField("mirror", "✅ ↔ UltimateBlock.class", "oop (mirror)"),
+            mkField("resolve", "完成 ✓", "Linker", "modified"),
+            mkField("state", "解析完成", "LinkState", "modified")
+        ],
+        initRunning: [
+            mkField("_super", "✅ → Object.InstanceKlass", "Klass*"),
+            mkField("_interfaces", "✅ []", "Array<Klass*>"),
+            mkField("_fields", "✅ [singleton, count1, count2]", "Array<FieldInfo>"),
+            mkField("_methods", "✅ [<clinit>, <init>, main, ...]", "Array<Method*>"),
+            mkField("_constant_pool", "✅ 已解析为直接引用", "ConstantPool"),
+            mkField("vtable/itable", "✅ 已构建", "Dispatch Tables"),
+            mkField("field_layout", "✅ 已计算", "Layout"),
+            mkField("mirror", "✅ ↔ UltimateBlock.class", "oop (mirror)"),
+            mkField("init", "<clinit> 执行中…", "InitState", "modified"),
+            mkField("state", "初始化中", "InitState", "modified")
+        ],
+        initPaused: [
+            mkField("_super", "✅ → Object.InstanceKlass", "Klass*"),
+            mkField("_interfaces", "✅ []", "Array<Klass*>"),
+            mkField("_fields", "✅ [singleton, count1, count2]", "Array<FieldInfo>"),
+            mkField("_methods", "✅ [<clinit>, <init>, main, ...]", "Array<Method*>"),
+            mkField("_constant_pool", "✅ 已解析为直接引用", "ConstantPool"),
+            mkField("vtable/itable", "✅ 已构建", "Dispatch Tables"),
+            mkField("field_layout", "✅ 已计算", "Layout"),
+            mkField("mirror", "✅ ↔ UltimateBlock.class", "oop (mirror)"),
+            mkField("init", "<clinit> 暂停", "InitState", "modified"),
+            mkField("state", "初始化中", "InitState", "modified")
+        ],
+        initialized: [
+            mkField("_super", "✅ → Object.InstanceKlass", "Klass*"),
+            mkField("_interfaces", "✅ []", "Array<Klass*>"),
+            mkField("_fields", "✅ [singleton, count1, count2]", "Array<FieldInfo>"),
+            mkField("_methods", "✅ [<clinit>, <init>, main, ...]", "Array<Method*>"),
+            mkField("_constant_pool", "✅ 已解析为直接引用", "ConstantPool"),
+            mkField("vtable/itable", "✅ 已构建", "Dispatch Tables"),
+            mkField("field_layout", "✅ 已计算", "Layout"),
+            mkField("mirror", "✅ ↔ UltimateBlock.class", "oop (mirror)"),
+            mkField("state", "初始化完成 ✓", "InitState", "modified")
+        ]
+    };
+
+    // 演示步骤配置（在你原 steps 的基础上：补了 InstanceKlass / mirror / Klass Pointer / arrows）
+    const steps = [
+        {
+            line: 0,
+            phase: "程序启动",
+            description: "JVM启动，准备执行main方法。此时需要先加载UltimateBlock类。",
+            keyPoint: true,
+            details: [
+                "JVM完成初始化",
+                "准备执行主类的main方法",
+                "触发UltimateBlock类的加载流程"
+            ],
+            memory: {
+                metaspace: [],
+                heap: [],
+                stack: [
+                    { name: 'main 线程', detail: '启动中...', type: 'new' }
+                ]
+            },
+            arrows: []
+        },
+        {
+            line: 0,
+            phase: "类加载 - 加载阶段",
+            description: "类加载器读取UltimateBlock.class字节码，构建InstanceKlass与Class mirror。此时已建立常量池/字段/方法等基础结构，但验证、准备、解析尚未完成。",
+            keyPoint: true,
+            details: [
+                "解析 class 文件结构：常量池、字段表、方法表",
+                "InstanceKlass：_fields/_methods ✅，_super 🔗，vtable/itable ⏳",
+                "记录父类/接口符号引用（解析在链接阶段完成）",
+                "元空间创建 InstanceKlass（Klass 元数据）",
+                "堆中创建 java.lang.Class（mirror）",
+                "⚠️ 静态字段存储尚未分配（准备阶段才分配并置零）",
+                "vtable/itable 尚未构建（linking 阶段）"
+            ],
+            memory: {
+                metaspace: [
+                    {
+                        kind: "instanceKlass",
+                        id: IDS.IK,
+                        name: "UltimateBlock.InstanceKlass",
+                        fields: IK_STATE.loading
+                    }
+                ],
+                heap: [
+                    {
+                        type: "class",
+                        id: IDS.CLS,
+                        name: "UltimateBlock.class",
+                        fields: [
+                            { name: "name", value: "\"UltimateBlock\"", fieldType: "String", status: "new" },
+                            { name: "static storage", value: "未分配（准备阶段）", fieldType: "Static Fields", status: "new" },
+                            { name: "mirror/metadata", value: "↔ UltimateBlock.InstanceKlass", fieldType: "Klass*", status: "new" }
+                        ]
+                    }
+                ],
+                stack: [
+                    { name: 'main 线程', detail: '类加载中', type: '' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" }
+            ]
+        },
+        {
+            line: 0,
+            phase: "类加载 - 验证阶段",
+            description: "验证字节码的正确性和安全性，确保符合JVM规范。",
+            details: [
+                "文件格式验证 - 检查魔数、版本号",
+                "元数据验证 - 语义分析",
+                "字节码验证 - 数据流和控制流分析",
+                "符号引用验证 - 确保可以正确解析",
+                "结构不变：_super 仍为 🔗，vtable/itable 仍 ⏳"
+            ],
+            memory: {
+                metaspace: [
+                    {
+                        kind: "instanceKlass",
+                        id: IDS.IK,
+                        name: "UltimateBlock.InstanceKlass",
+                        fields: IK_STATE.verified
+                    }
+                ],
+                heap: [
+                    {
+                        type: "class",
+                        id: IDS.CLS,
+                        name: "UltimateBlock.class",
+                        fields: [
+                            { name: "name", value: "\"UltimateBlock\"", fieldType: "String", status: "" },
+                            { name: "static storage", value: "未分配（准备阶段）", fieldType: "Static Fields", status: "" },
+                            { name: "mirror/metadata", value: "↔ UltimateBlock.InstanceKlass", fieldType: "Klass*", status: "" }
+                        ]
+                    }
+                ],
+                stack: [
+                    { name: 'main 线程', detail: '验证阶段', type: '' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" }
+            ]
+        },
+        {
+            line: 0,
+            phase: "类加载 - 准备阶段",
+            description: "为静态变量分配存储并设置零值，同时计算字段布局/偏移（实例大小确定）。静态字段存放在 Class mirror 中。",
+            keyPoint: true,
+            details: [
+                "为 static 字段分配存储（Class mirror）",
+                "设置零值：singleton=null，count1=0，count2=0",
+                "计算实例字段布局/偏移（对象大小确定，field_layout ✅）",
+                "⚠️ 这里只是赋零值，不执行显式初始化（<clinit> 未开始）"
+            ],
+            memory: {
+                metaspace: [
+                    {
+                        kind: "instanceKlass",
+                        id: IDS.IK,
+                        name: "UltimateBlock.InstanceKlass",
+                        fields: IK_STATE.prepared
+                    }
+                ],
+                heap: [
+                    {
+                        type: 'class',
+                        id: IDS.CLS,
+                        name: 'UltimateBlock.class',
+                        fields: [
+                            { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                            { name: 'singleton', value: 'null', fieldType: 'static UltimateBlock', status: 'new' },
+                            { name: 'count1', value: '0', fieldType: 'static int', status: 'new' },
+                            { name: 'count2', value: '0', fieldType: 'static int', status: 'new' }
+                        ]
+                    }
+                ],
+                stack: [
+                    { name: 'main 线程', detail: '准备阶段', type: '' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" }
+            ]
+        },
+        {
+            line: 0,
+            phase: "类加载 - 解析阶段",
+            description: "将符号引用转换为直接引用，建立实际的内存地址链接（简化展示）。解析在JVM里可能是延迟的，这里统一展示为完成。",
+            details: [
+                "解析类/字段/方法符号引用",
+                "父类/接口符号引用解析为直接引用",
+                "构建 vtable/itable（用于虚方法/接口方法分派）",
+                "建立直接引用（可能按需延迟，这里统一展示）",
+                "_super 🔗→✅，vtable/itable ✅"
+            ],
+            memory: {
+                metaspace: [
+                    {
+                        kind: "instanceKlass",
+                        id: IDS.IK,
+                        name: "UltimateBlock.InstanceKlass",
+                        fields: IK_STATE.resolved
+                    }
+                ],
+                heap: [
+                    {
+                        type: 'class',
+                        id: IDS.CLS,
+                        name: 'UltimateBlock.class',
+                        fields: [
+                            { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                            { name: 'singleton', value: 'null', fieldType: 'static UltimateBlock', status: '' },
+                            { name: 'count1', value: '0', fieldType: 'static int', status: '' },
+                            { name: 'count2', value: '0', fieldType: 'static int', status: '' }
+                        ]
+                    }
+                ],
+                stack: [
+                    { name: 'main 线程', detail: '解析阶段', type: '' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" }
+            ]
+        },
+        {
+            line: 4,
+            phase: "类初始化 - <clinit> 开始",
+            description: "开始执行 <clinit>。按声明顺序初始化静态变量：singleton = new UltimateBlock()（触发对象创建）。",
+            keyPoint: true,
+            details: [
+                "<clinit> 由编译器生成",
+                "按声明顺序执行静态初始化",
+                "遇到 new → 触发实例创建",
+                "稍后再回到 <clinit>",
+                "类状态：初始化中（InstanceKlass 已解析完成）"
+            ],
+            memory: {
+                metaspace: [
+                    {
+                        kind: "instanceKlass",
+                        id: IDS.IK,
+                        name: "UltimateBlock.InstanceKlass",
+                        fields: IK_STATE.initRunning
+                    }
+                ],
+                heap: [
+                    {
+                        type: 'class',
+                        id: IDS.CLS,
+                        name: 'UltimateBlock.class',
+                        fields: [
+                            { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                            { name: 'singleton', value: 'null', fieldType: 'static UltimateBlock', status: '' },
+                            { name: 'count1', value: '0', fieldType: 'static int', status: '' },
+                            { name: 'count2', value: '0', fieldType: 'static int', status: '' }
+                        ]
+                    }
+                ],
+                stack: [
+                    { name: 'main 线程 → <clinit>', detail: '类初始化方法', type: 'new' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" }
+            ]
+        },
+        {
+            line: 4,
+            phase: "对象创建 - 暂停 <clinit>",
+            description: "new UltimateBlock() 触发对象创建。<clinit> 暂停，转而执行 <init>（对象初始化）。",
+            keyPoint: true,
+            details: [
+                "遇到 new → 创建实例",
+                "<clinit> 暂停（嵌套调用）",
+                "执行 <init>：实例代码块 + 构造器"
+            ],
+            memory: {
+                metaspace: [
+                    {
+                        kind: "instanceKlass",
+                        id: IDS.IK,
+                        name: "UltimateBlock.InstanceKlass",
+                        fields: IK_STATE.initPaused
+                    }
+                ],
+                heap: [
+                    {
+                        type: 'class',
+                        id: IDS.CLS,
+                        name: 'UltimateBlock.class',
+                        fields: [
+                            { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                            { name: 'singleton', value: 'null', fieldType: 'static UltimateBlock', status: '' },
+                            { name: 'count1', value: '0', fieldType: 'static int', status: '' },
+                            { name: 'count2', value: '0', fieldType: 'static int', status: '' }
+                        ]
+                    }
+                ],
+                stack: [
+                    { name: 'main 线程 → <clinit>', detail: '暂停执行', type: '' },
+                    { name: 'main 线程 → <init>', detail: '对象初始化方法', type: 'new' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" }
+            ]
+        },
+        {
+            line: 4,
+            phase: "对象创建 - 分配内存",
+            description: "在堆中为新对象分配内存。关键：对象头里会设置 Klass Pointer → 指向元空间的 InstanceKlass。",
+            keyPoint: true,
+            details: [
+                "堆上分配实例内存",
+                "初始化对象头：Mark Word + Klass Pointer",
+                "Klass Pointer 指向元空间的 UltimateBlock.InstanceKlass",
+                "这就是实例与类元数据的真实连接点（HotSpot）"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initPaused }
+                ],
+                heap: [
+                    {
+                        type: 'class',
+                        id: IDS.CLS,
+                        name: 'UltimateBlock.class',
+                        fields: [
+                            { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                            { name: 'singleton', value: 'null', fieldType: 'static UltimateBlock', status: '' },
+                            { name: 'count1', value: '0', fieldType: 'static int', status: '' },
+                            { name: 'count2', value: '0', fieldType: 'static int', status: '' }
+                        ]
+                    },
+                    {
+                        type: 'instance',
+                        id: IDS.INS,
+                        name: 'UltimateBlock@instance',
+                        fields: [
+                            { name: '对象头.Mark Word', value: '分配中…', fieldType: 'MarkWord', status: 'new' },
+                            { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: 'new' }
+                        ]
+                    }
+                ],
+                stack: [
+                    { name: 'main 线程 → <clinit>', detail: '暂停执行', type: '' },
+                    { name: 'main 线程 → <init>', detail: '分配内存', type: '' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        // 下面步骤：为节省篇幅（同时保持你原来的语义），我只在“有对象/类元数据关系变化的关键步骤”继续带 arrows。
+        // 其余步骤沿用你原逻辑：count1/count2变化、栈帧变化等。
+
+        {
+            line: 4,
+            phase: "对象创建 - 内存清零",
+            description: "将分配的内存初始化为零值（默认值）。对象头里的 Klass Pointer 已经指向 InstanceKlass。",
+            details: [
+                "实例字段清零：引用=null，基本类型=0/false",
+                "对象头保持：Mark Word + Klass Pointer",
+                "确保对象内存安全"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initPaused }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'singleton', value: 'null', fieldType: 'static UltimateBlock', status: '' },
+                        { name: 'count1', value: '0', fieldType: 'static int', status: '' },
+                        { name: 'count2', value: '0', fieldType: 'static int', status: '' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Mark Word', value: '已设置', fieldType: 'MarkWord', status: 'modified' },
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' }
+                    ] }
+                ],
+                stack: [
+                    { name: 'main 线程 → <clinit>', detail: '暂停执行', type: '' },
+                    { name: 'main 线程 → <init>', detail: '内存清零完成', type: '' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        {
+            line: 14,
+            phase: "对象初始化 - 实例代码块",
+            description: "执行实例代码块：count1++。注意：修改的是堆中 Class（mirror）里的静态字段。",
+            keyPoint: true,
+            details: [
+                "实例代码块先于构造器",
+                "count1++：0 → 1",
+                "静态字段属于 Class（mirror）",
+                "实例只是“通过类”访问它（语义上仍是静态）"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initPaused }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'singleton', value: 'null', fieldType: 'static UltimateBlock', status: '' },
+                        { name: 'count1', value: '1', fieldType: 'static int', status: 'modified' },
+                        { name: 'count2', value: '0', fieldType: 'static int', status: '' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' }
+                    ] }
+                ],
+                stack: [
+                    { name: 'main 线程 → <clinit>', detail: '暂停执行', type: '' },
+                    { name: 'main 线程 → <init>', detail: '实例代码块执行中', type: 'modified' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        {
+            line: 15,
+            phase: "对象初始化 - 实例代码块",
+            description: "执行实例代码块：count2++（0 → 1）。",
+            details: [
+                "count2++：0 → 1",
+                "实例代码块执行完毕",
+                "接下来执行构造器"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initPaused }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'singleton', value: 'null', fieldType: 'static UltimateBlock', status: '' },
+                        { name: 'count1', value: '1', fieldType: 'static int', status: '' },
+                        { name: 'count2', value: '1', fieldType: 'static int', status: 'modified' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' }
+                    ] }
+                ],
+                stack: [
+                    { name: 'main 线程 → <clinit>', detail: '暂停执行', type: '' },
+                    { name: 'main 线程 → <init>', detail: '实例代码块执行中', type: '' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        {
+            line: 19,
+            phase: "对象初始化 - 构造器",
+            description: "执行构造器代码（本例为空）。对象初始化完成。",
+            details: [
+                "构造器是实例初始化的最后一步",
+                "本例构造器无额外逻辑",
+                "准备返回对象引用给 <clinit>"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initPaused }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'singleton', value: 'null', fieldType: 'static UltimateBlock', status: '' },
+                        { name: 'count1', value: '1', fieldType: 'static int', status: '' },
+                        { name: 'count2', value: '1', fieldType: 'static int', status: '' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: '状态', value: '初始化完成 ✓', fieldType: 'Ready', status: 'new' }
+                    ] }
+                ],
+                stack: [
+                    { name: 'main 线程 → <clinit>', detail: '暂停执行', type: '' },
+                    { name: 'main 线程 → <init>', detail: '构造器执行', type: 'modified' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        {
+            line: 4,
+            phase: "返回 <clinit> - 对象引用赋值",
+            description: "对象创建完成，返回引用给 singleton（静态字段在 Class mirror 中）。<clinit> 继续执行。",
+            keyPoint: true,
+            details: [
+                "new UltimateBlock() 完成",
+                "singleton 指向实例",
+                "回到 <clinit> 继续后续静态初始化"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initRunning }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'singleton', value: '→ UltimateBlock@instance', fieldType: 'static UltimateBlock', status: 'modified' },
+                        { name: 'count1', value: '1', fieldType: 'static int', status: '' },
+                        { name: 'count2', value: '1', fieldType: 'static int', status: '' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: '状态', value: '已赋值给 singleton', fieldType: 'Referenced', status: 'modified' }
+                    ] }
+                ],
+                stack: [
+                    { name: 'main 线程 → <clinit>', detail: '继续执行', type: 'modified' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        {
+            line: 7,
+            phase: "类初始化 - 处理 count1",
+            description: "count1 无显式赋值，<clinit> 中不会生成赋值指令，保持当前值 1。",
+            keyPoint: true,
+            details: [
+                "public static int count1;（无显式赋值）",
+                "<clinit> 中没有 count1=... 指令",
+                "count1 保持：1"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initRunning }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'singleton', value: '→ UltimateBlock@instance', fieldType: 'static UltimateBlock', status: '' },
+                        { name: 'count1', value: '1', fieldType: 'static int (保持)', status: '' },
+                        { name: 'count2', value: '1', fieldType: 'static int', status: '' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' }
+                    ] }
+                ],
+                stack: [
+                    { name: 'main 线程 → <clinit>', detail: '处理 count1', type: '' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        {
+            line: 10,
+            phase: "类初始化 - 处理 count2",
+            description: "count2 有显式赋值 (= 0)，会覆盖之前实例代码块改成的 1。",
+            keyPoint: true,
+            details: [
+                "public static int count2 = 0;（有显式赋值）",
+                "执行赋值：count2 = 0",
+                "count2 从 1 被覆盖为 0"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initRunning }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'singleton', value: '→ UltimateBlock@instance', fieldType: 'static UltimateBlock', status: '' },
+                        { name: 'count1', value: '1', fieldType: 'static int', status: '' },
+                        { name: 'count2', value: '0', fieldType: 'static int (覆盖)', status: 'modified' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' }
+                    ] }
+                ],
+                stack: [
+                    { name: 'main 线程 → <clinit>', detail: '处理 count2', type: 'modified' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        // ✅ 后续 main / 输出步骤：保留你原来的展示，但仍保持三者关系不丢失
+        {
+            line: 0,
+            phase: "类初始化完成",
+            description: "<clinit> 执行完毕，类初始化完成。最终：count1=1，count2=0。",
+            keyPoint: true,
+            details: [
+                "类进入已初始化状态",
+                "静态字段最终值稳定",
+                "可以正常调用 getInstance / main",
+                "InstanceKlass：_super ✅，vtable/itable ✅"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initialized }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'singleton', value: '→ UltimateBlock@instance', fieldType: 'static UltimateBlock', status: '' },
+                        { name: 'count1', value: '1', fieldType: 'static int (最终)', status: '' },
+                        { name: 'count2', value: '0', fieldType: 'static int (最终)', status: '' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: '状态', value: '已赋值给 singleton', fieldType: 'Referenced', status: '' }
+                    ] }
+                ],
+                stack: [
+                    { name: 'main 线程', detail: 'main 方法', type: 'modified' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        {
+            line: 29,
+            phase: "执行 main - 调用 getInstance()",
+            description: "main 调用 getInstance() 返回 singleton。obj（栈）指向实例（堆）。实例对象头 Klass Pointer 仍指向 InstanceKlass（元空间）。",
+            details: [
+                "obj = getInstance()",
+                "obj 存在栈的局部变量表",
+                "obj 指向堆中实例对象",
+                "实例对象头：Klass Pointer → InstanceKlass"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initialized }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'singleton', value: '→ UltimateBlock@instance', fieldType: 'static UltimateBlock', status: '' },
+                        { name: 'count1', value: '1', fieldType: 'static int', status: '' },
+                        { name: 'count2', value: '0', fieldType: 'static int', status: '' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: '状态', value: '被 obj 引用', fieldType: 'Referenced', status: 'modified' }
+                    ] }
+                ],
+                stack: [
+                    { name: 'main 线程 → main 方法', detail: 'getInstance() 调用', type: '' },
+                    { name: 'obj 局部变量', detail: '→ UltimateBlock@instance', type: 'new' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        {
+            line: 30,
+            phase: "执行 main - 打印 count1",
+            description: "输出 count1。访问静态字段仍属于 Class（mirror）。",
+            details: [
+                'println("count1=" + obj.count1)',
+                "静态字段 count1 属于 Class（mirror）",
+                "输出：count1=1"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initialized }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'count1', value: '1', fieldType: 'static int', status: 'modified' },
+                        { name: 'count2', value: '0', fieldType: 'static int', status: '' },
+                        { name: 'singleton', value: '→ UltimateBlock@instance', fieldType: 'static UltimateBlock', status: '' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' }
+                    ] }
+                ],
+                stack: [
+                    { name: 'main 线程 → main 方法', detail: 'println() 执行', type: '' },
+                    { name: 'obj 局部变量', detail: '→ UltimateBlock@instance', type: '' },
+                    { name: '控制台输出', detail: 'count1=1', type: 'new' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        {
+            line: 31,
+            phase: "执行 main - 打印 count2",
+            description: "输出 count2：0。",
+            details: [
+                'println("count2=" + obj.count2)',
+                "输出：count2=0",
+                "main 方法执行完毕"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initialized }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'count1', value: '1', fieldType: 'static int', status: '' },
+                        { name: 'count2', value: '0', fieldType: 'static int', status: 'modified' },
+                        { name: 'singleton', value: '→ UltimateBlock@instance', fieldType: 'static UltimateBlock', status: '' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' }
+                    ] }
+                ],
+                stack: [
+                    { name: 'main 线程 → main 方法', detail: 'println() 执行', type: '' },
+                    { name: 'obj 局部变量', detail: '→ UltimateBlock@instance', type: '' },
+                    { name: '控制台输出', detail: 'count2=0', type: 'modified' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        },
+
+        {
+            line: 0,
+            phase: "程序执行完成",
+            description: "main 结束，程序退出。最终输出：count1=1, count2=0。",
+            keyPoint: true,
+            details: [
+                "程序执行完成 ✓",
+                "count2 在实例代码块中 ++ 到 1",
+                "但随后被显式赋值 (=0) 覆盖",
+                "所以最终 count2=0"
+            ],
+            memory: {
+                metaspace: [
+                    { kind: "instanceKlass", id: IDS.IK, name: "UltimateBlock.InstanceKlass", fields: IK_STATE.initialized }
+                ],
+                heap: [
+                    { type: 'class', id: IDS.CLS, name: 'UltimateBlock.class', fields: [
+                        { name: 'mirror/metadata', value: '↔ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: 'singleton', value: '→ UltimateBlock@instance', fieldType: 'static UltimateBlock', status: '' },
+                        { name: 'count1', value: '1', fieldType: 'static int (最终)', status: '' },
+                        { name: 'count2', value: '0', fieldType: 'static int (最终)', status: '' }
+                    ] },
+                    { type: 'instance', id: IDS.INS, name: 'UltimateBlock@instance', fields: [
+                        { name: '对象头.Klass Pointer', value: '→ UltimateBlock.InstanceKlass', fieldType: 'Klass*', status: '' },
+                        { name: '状态', value: '程序结束', fieldType: 'Completed', status: '' }
+                    ] }
+                ],
+                stack: [
+                    { name: '程序状态', detail: '执行完成 ✓', type: 'modified' }
+                ]
+            },
+            arrows: [
+                { from: IDS.CLS, to: IDS.IK, label: "mirror" },
+                { from: IDS.INS, to: IDS.IK, label: "Klass Pointer" }
+            ]
+        }
+    ];
+
+    // 状态变量
+    let currentStep = 0;
+    let isPlaying = false;
+    let playTimer = null;
+    let playSpeed = 1200;
+
+    function init() {
+        renderCode();
+        renderTimeline();
+        goToStep(0);
+    }
+
+    // 渲染代码
+    function renderCode() {
+        const lines = sourceCode.split('\n');
+        const html = lines.map((line, index) => {
+            return `
+                <div class="code-line" data-line="${index + 1}">
+                    <span class="line-num">${index + 1}</span>
+                    <span class="line-code">${escapeHtml(line)}</span>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('codeContent').innerHTML = html;
+    }
+
+    // 渲染时间轴
+    function renderTimeline() {
+        const html = steps.map((step, index) => {
+            const classes = ['timeline-marker'];
+            if (step.keyPoint) classes.push('key-point');
+            return `<div class="${classes.join(' ')}" data-step="${index}"></div>`;
+        }).join('');
+        document.getElementById('timelineMarkers').innerHTML = html;
+
+        document.querySelectorAll('.timeline-marker').forEach((marker, index) => {
+            marker.addEventListener('click', () => {
+                stopPlay();
+                goToStep(index);
+            });
+        });
+    }
+
+    // 跳转步骤
+    function goToStep(step) {
+        currentStep = Math.max(0, Math.min(step, steps.length - 1));
+
+        updateCodeHighlight();
+        updateMemory();
+        updateDescription();
+        updateProgress();
+        updateButtons();
+
+        // ✅ 箭头渲染：等 DOM 渲染后再画
+        setTimeout(() => {
+            renderArrows(steps[currentStep].arrows || []);
+        }, 80);
+    }
+
+    // 更新代码高亮
+    function updateCodeHighlight() {
+        const currentLine = steps[currentStep].line;
+        document.querySelectorAll('.code-line').forEach((line, index) => {
+            const lineNum = index + 1;
+            line.classList.remove('active', 'executed');
+
+            if (currentLine > 0) {
+                if (lineNum === currentLine) line.classList.add('active');
+                else if (lineNum < currentLine) line.classList.add('executed');
+            }
+        });
+
+        if (currentLine > 0) {
+            const activeLine = document.querySelector('.code-line.active');
+            if (activeLine) activeLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    // 更新内存显示
+    function updateMemory() {
+        const memory = steps[currentStep].memory;
+
+        renderMetaspace(memory.metaspace);
+        renderHeap(memory.heap);
+        renderStack(memory.stack);
+
+        highlightActiveRegions(memory);
+    }
+
+    // ✅ 渲染元空间（以“InstanceKlass 卡片”的方式呈现，便于 data-id 连线）
+    function renderMetaspace(items) {
+        const container = document.getElementById('metaspaceContent');
+        if (!items || items.length === 0) {
+            container.innerHTML = '<div class="empty-message">等待类加载...</div>';
+            return;
+        }
+
+        const html = items.map(obj => {
+            const fieldsHtml = (obj.fields || []).map(field => `
+                <div class="memory-item appear ${field.status || ''}">
+                    <div class="item-name">${field.name}</div>
+                    <div class="item-value">${field.value}</div>
+                    <div class="item-type">${field.fieldType || 'Metadata'}</div>
+                </div>
+            `).join('');
+
+            return `
+                <div class="meta-klass" data-id="${obj.id || obj.name}">
+                    <div class="object-header">${obj.name}</div>
+                    ${fieldsHtml}
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+
+        setTimeout(() => {
+            container.querySelectorAll('.memory-item').forEach((item, index) => {
+                setTimeout(() => item.classList.add('appear'), index * 40);
+            });
+        }, 10);
+    }
+
+    // 渲染堆
+    function renderHeap(objects) {
+        const container = document.getElementById('heapContent');
+        if (!objects || objects.length === 0) {
+            container.innerHTML = '<div class="empty-message">等待对象创建...</div>';
+            return;
+        }
+
+        const html = objects.map(obj => {
+            const containerClass = obj.type === 'instance' ? 'object-instance' : 'class-object';
+            const fieldsHtml = (obj.fields || []).map(field => `
+                <div class="memory-item appear ${field.status || ''}">
+                    <div class="item-name">${field.name}</div>
+                    <div class="item-value">${field.value}</div>
+                    <div class="item-type">${field.fieldType}</div>
+                </div>
+            `).join('');
+
+            return `
+                <div class="${containerClass}" data-id="${obj.id || obj.name}">
+                    <div class="object-header">${obj.name}</div>
+                    ${fieldsHtml}
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+
+        setTimeout(() => {
+            container.querySelectorAll('.memory-item').forEach((item, index) => {
+                setTimeout(() => item.classList.add('appear'), index * 40);
+            });
+        }, 10);
+    }
+
+    // 渲染栈
+    function renderStack(frames) {
+        const container = document.getElementById('stackContent');
+        if (!frames || frames.length === 0) {
+            container.innerHTML = '<div class="empty-message">等待方法调用...</div>';
+            return;
+        }
+
+        const html = frames.map(frame => `
+            <div class="stack-frame appear ${frame.type || ''}">
+                <div class="frame-name">${frame.name}</div>
+                <div class="frame-detail">${frame.detail}</div>
+            </div>
+        `).join('');
+        container.innerHTML = html;
+
+        setTimeout(() => {
+            container.querySelectorAll('.stack-frame').forEach((item, index) => {
+                setTimeout(() => item.classList.add('appear'), index * 40);
+            });
+        }, 10);
+    }
+
+    function highlightActiveRegions(memory) {
+        document.getElementById('metaspaceRegion').classList.toggle('highlight', (memory.metaspace || []).length > 0);
+        document.getElementById('heapRegion').classList.toggle('highlight', (memory.heap || []).length > 0);
+        document.getElementById('stackRegion').classList.toggle('highlight', (memory.stack || []).length > 0);
+    }
+
+    // 更新描述
+    function updateDescription() {
+        const step = steps[currentStep];
+        document.getElementById('phaseNumber').textContent = currentStep + 1;
+        document.getElementById('phaseTitle').textContent = step.phase;
+        document.getElementById('phaseDescription').textContent = step.description;
+
+        const detailsHtml = (step.details || []).map(detail => `<li>${detail}</li>`).join('');
+        document.getElementById('detailList').innerHTML = detailsHtml;
+    }
+
+    // 更新进度
+    function updateProgress() {
+        const progress = (currentStep / (steps.length - 1)) * 100;
+        document.getElementById('progressFill').style.width = progress + '%';
+        document.getElementById('currentPhase').textContent = steps[currentStep].phase;
+        document.getElementById('stepCount').textContent = `步骤 ${currentStep + 1}/${steps.length}`;
+
+        document.querySelectorAll('.timeline-marker').forEach((marker, index) => {
+            marker.classList.remove('completed', 'active');
+            if (index < currentStep) marker.classList.add('completed');
+            else if (index === currentStep) marker.classList.add('active');
+        });
+    }
+
+    function updateButtons() {
+        document.getElementById('prevBtn').disabled = currentStep === 0;
+        document.getElementById('nextBtn').disabled = currentStep === steps.length - 1;
+    }
+
+    // 播放控制
+    function togglePlay() { isPlaying ? stopPlay() : startPlay(); }
+
+    function startPlay() {
+        if (currentStep === steps.length - 1) goToStep(0);
+
+        isPlaying = true;
+        document.getElementById('playIcon').textContent = '⏸';
+        document.getElementById('playText').textContent = '暂停';
+
+        playTimer = setInterval(() => {
+            if (currentStep < steps.length - 1) goToStep(currentStep + 1);
+            else stopPlay();
+        }, playSpeed);
+    }
+
+    function stopPlay() {
+        isPlaying = false;
+        document.getElementById('playIcon').textContent = '▶';
+        document.getElementById('playText').textContent = '播放';
+        if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    }
+
+    function nextStep() { stopPlay(); if (currentStep < steps.length - 1) goToStep(currentStep + 1); }
+    function prevStep() { stopPlay(); if (currentStep > 0) goToStep(currentStep - 1); }
+    function reset() { stopPlay(); goToStep(0); }
+
+    // 工具函数
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    /**
+     * ✅ 画箭头：根据 data-id 定位元素连线
+     */
+    function renderArrows(arrows) {
+        const svg = document.getElementById('connectionSvg');
+        svg.innerHTML = `
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                    <polygon points="0 0, 10 3, 0 6" fill="var(--accent-blue)"></polygon>
+                </marker>
+            </defs>
+        `;
+
+        if (!arrows || arrows.length === 0) return;
+
+        arrows.forEach(arrow => {
+            const fromEl = document.querySelector(`[data-id="${arrow.from}"]`);
+            const toEl = document.querySelector(`[data-id="${arrow.to}"]`);
+            if (!fromEl || !toEl) return;
+
+            const fromRect = fromEl.getBoundingClientRect();
+            const toRect = toEl.getBoundingClientRect();
+
+            const x1 = fromRect.left + fromRect.width / 2;
+            const y1 = fromRect.top + fromRect.height / 2;
+            const x2 = toRect.left + toRect.width / 2;
+            const y2 = toRect.top + toRect.height / 2;
+
+            const midX = (x1 + x2) / 2;
+            const midY = (y1 + y2) / 2 - 60;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', `M ${x1} ${y1} Q ${midX} ${midY} ${x2} ${y2}`);
+            path.setAttribute('class', 'arrow');
+            path.setAttribute('marker-end', 'url(#arrowhead)');
+            svg.appendChild(path);
+
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', midX);
+            text.setAttribute('y', midY - 6);
+            text.setAttribute('class', 'arrow-label');
+            text.setAttribute('text-anchor', 'middle');
+            text.textContent = arrow.label || '';
+            svg.appendChild(text);
+
+            setTimeout(() => {
+                path.classList.add('visible');
+                text.classList.add('visible');
+            }, 10);
+        });
+    }
+
+    // 事件监听
+    document.getElementById('playBtn').addEventListener('click', togglePlay);
+    document.getElementById('nextBtn').addEventListener('click', nextStep);
+    document.getElementById('prevBtn').addEventListener('click', prevStep);
+    document.getElementById('resetBtn').addEventListener('click', reset);
+
+    document.getElementById('speedSelect').addEventListener('change', (e) => {
+        playSpeed = parseInt(e.target.value);
+        if (isPlaying) { stopPlay(); startPlay(); }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+        else if (e.code === 'ArrowRight') { e.preventDefault(); nextStep(); }
+        else if (e.code === 'ArrowLeft') { e.preventDefault(); prevStep(); }
+        else if (e.code === 'KeyR') { e.preventDefault(); reset(); }
+    });
+
+    window.addEventListener('resize', () => {
+        renderArrows(steps[currentStep].arrows || []);
+    });
+
+    // 初始化
+    init();
+</script>
+</body>
+</html>

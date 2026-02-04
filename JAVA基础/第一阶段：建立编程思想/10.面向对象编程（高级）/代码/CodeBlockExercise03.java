@@ -35,3 +35,12 @@ public class CodeBlockExercise03 {
         System.out.println("count2=" + obj.count2);
     }
 }
+
+/* 输出结果：
+*************************************
+普通代码块执行
+执行构造器
+count1=1
+count2=0
+*************************************
+*/
