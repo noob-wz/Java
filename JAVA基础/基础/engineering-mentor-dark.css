@@ -1,0 +1,200 @@
+/*
+ * Universal Engineering Theme
+ * 综合了 GitHub 风格、工程化结构与现代 UI 设计
+ * 自动适配 Light/Dark 模式
+ */
+
+/* =========================================
+   1. 全局变量定义 (默认亮色模式)
+   ========================================= */
+:root {
+  /* 核心色板 - 亮色 (Light Mode) */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f8fa;       /* 引用块、表头背景 */
+  --text-primary: #24292e;       /* 正文黑 */
+  --text-secondary: #586069;     /* 辅助灰 */
+  --accent-color: #0969da;       /* 链接与重点色 */
+  --border-color: #d0d7de;       /* 分割线 */
+
+  /* 功能色 */
+  --quote-border: #2da44e;       /* 引用块左侧竖线 (绿色代表正确/通过) */
+  --code-bg-inline: rgba(175, 184, 193, 0.2);
+  --code-text-inline: #24292e;
+  --code-block-bg: #1f2428;      /* 代码块强制深色，保持对比度 */
+  --code-block-text: #e1e4e8;
+
+  /* 排版参数 */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", Consolas, Menlo, monospace;
+  --spacing-unit: 1rem;
+}
+
+/* =========================================
+   2. 暗色模式覆盖 (Dark Mode Overrides)
+   自动检测系统/IDE 设置
+   ========================================= */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #0d1117;       /* GitHub Dark 背景 */
+    --bg-secondary: #161b22;
+    --text-primary: #c9d1d9;     /* 柔和灰白 */
+    --text-secondary: #8b949e;
+    --accent-color: #58a6ff;     /* 亮蓝 */
+    --border-color: #30363d;
+
+    --quote-border: #238636;     /* 深绿 */
+    --code-bg-inline: rgba(110, 118, 129, 0.4);
+    --code-text-inline: #e1e4e8;
+    /* 代码块在暗色模式下背景微调，与主背景区分 */
+    --code-block-bg: #161b22;
+  }
+}
+
+/* =========================================
+   3. 全局布局与排版
+   ========================================= */
+body {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.75;           /* 黄金阅读行高 */
+  color: var(--text-primary);
+  background-color: var(--bg-primary) !important;
+  padding: 2rem 3rem;          /* 增加左右留白，类似阅读模式 */
+  max-width: 1000px;           /* 限制最大宽度，防止单行过长 */
+  margin: 0 auto;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 链接 */
+a {
+  color: var(--accent-color);
+  text-decoration: none;
+  font-weight: 500;
+}
+a:hover { text-decoration: underline; }
+
+/* =========================================
+   4. 标题体系 (Visual Hierarchy)
+   ========================================= */
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 2em;
+  margin-bottom: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+h1 {
+  font-size: 2.25em;
+  padding-bottom: 0.3em;
+  border-bottom: 2px solid var(--border-color);
+}
+
+h2 {
+  font-size: 1.75em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border-color);
+}
+
+h3 {
+  font-size: 1.5em;
+  /* 左侧小竖条装饰，增强子章节识别度 */
+  border-left: 4px solid var(--accent-color);
+  padding-left: 10px;
+}
+
+/* =========================================
+   5. 引用块 (Blockquotes) - 核心知识点容器
+   ========================================= */
+blockquote {
+  margin: 1.5em 0;
+  padding: 1em 1.5em;
+  color: var(--text-secondary);
+  background-color: var(--bg-secondary);
+  border-left: 5px solid var(--quote-border);
+  border-radius: 0 6px 6px 0; /* 右侧圆角 */
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.05); /* 微阴影 */
+}
+
+blockquote p { margin: 0; }
+
+/* =========================================
+   6. 代码样式 (The "IDE" Look)
+   ========================================= */
+/* 行内代码 */
+p code, li code, td code {
+  padding: 0.2em 0.4em;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 85%;
+  background-color: var(--code-bg-inline);
+  color: var(--code-text-inline);
+  border-radius: 6px; /* 更圆润 */
+}
+
+/* 代码块 */
+pre {
+  padding: 16px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 90%; /* 稍微大一点，看代码不费眼 */
+  line-height: 1.5;
+  background-color: var(--code-block-bg);
+  color: var(--code-block-text);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* 立体感 */
+}
+
+pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: inherit; /* 继承 pre 的颜色 */
+}
+
+/* =========================================
+   7. 表格与列表
+   ========================================= */
+table {
+  border-spacing: 0;
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 1.5em;
+  display: block; /* 允许横向滚动 */
+  overflow: auto;
+}
+
+th, td {
+  padding: 10px 16px;
+  border: 1px solid var(--border-color);
+}
+
+th {
+  font-weight: 600;
+  background-color: var(--bg-secondary);
+}
+
+/* 隔行变色，增强数据可读性 */
+tr:nth-child(2n) { background-color: var(--bg-secondary); }
+
+ul, ol { padding-left: 2em; }
+li { margin-bottom: 0.5em; }
+
+/* 分割线 */
+hr {
+  height: 2px;
+  padding: 0;
+  margin: 3rem 0;
+  background-color: var(--border-color);
+  border: 0;
+}
+
+/* 图片自适应 */
+img {
+  max-width: 100%;
+  box-sizing: content-box;
+  background-color: #fff; /* 防止透明图片在暗色下看不清 */
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}

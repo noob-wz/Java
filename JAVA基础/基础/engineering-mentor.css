@@ -1,0 +1,198 @@
+/*
+ * IDEA Engineering Theme - Pure Light Edition
+ * 专为浅色阅读优化的纯净版
+ */
+
+/* =========================================
+   1. 核心变量 (Light Mode Only)
+   ========================================= */
+:root {
+  --bg-pure: #ffffff;             /* 纯白底色 */
+  --text-main: #24292e;           /* 主文字：深灰 (GitHub风) */
+  --text-dim: #57606a;            /* 弱化文字 */
+  --accent: #0366d6;              /* 链接蓝 */
+  --border: #e1e4e8;              /* 浅灰分割线 */
+
+  --h-primary: #1f2328;           /* 标题色 */
+  --h-decoration: #0969da;        /* H3 左侧装饰色 */
+
+  --quote-line: #2da44e;          /* 引用块绿线 */
+  --quote-bg: #f6f8fa;            /* 引用块背景 */
+
+  --code-bg: #f6f8fa;             /* 代码块背景 (极浅灰) */
+  --mac-dots-bg: #e1e4e8;         /* 伪装的 Title Bar 分割线色 */
+  --highlight-red: #cf222e;       /* 重点文字红 */
+}
+
+/* =========================================
+   2. 全局重置 (Force Reset)
+   ========================================= */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif !important;
+  font-size: 16px !important;
+  line-height: 1.75 !important;
+  color: var(--text-main) !important;
+  background-color: var(--bg-pure) !important; /* 强制白底 */
+  padding: 2.5rem 3rem !important; /* 宽敞的内边距 */
+  max-width: 900px !important;     /* 限制阅读宽度，防止过宽累眼 */
+  margin: 0 auto !important;
+}
+
+/* =========================================
+   3. 标题体系 (与你喜欢的截图一致)
+   ========================================= */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--h-primary) !important;
+  margin-top: 2em !important;
+  margin-bottom: 1rem !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+}
+
+h1 {
+  font-size: 2.25em !important;
+  padding-bottom: 0.3em !important;
+  border-bottom: 2px solid var(--border) !important;
+}
+
+h2 {
+  font-size: 1.75em !important;
+  padding-bottom: 0.3em !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+h3 {
+  font-size: 1.5em !important;
+  /* 也就是你喜欢的左侧竖线 */
+  padding-left: 12px !important;
+  border-left: 5px solid var(--h-decoration) !important;
+  border-bottom: none !important;
+}
+
+/* =========================================
+   4. 内容排版
+   ========================================= */
+p { margin-bottom: 1.2rem !important; }
+
+/* 重点强调 (Bold) -> 红色 */
+strong {
+  font-weight: 600 !important;
+  color: var(--highlight-red) !important;
+}
+
+a {
+  color: var(--accent) !important;
+  text-decoration: none !important;
+}
+a:hover { text-decoration: underline !important; }
+
+/* 引用块 (Blockquote) */
+blockquote {
+  margin: 1.5rem 0 !important;
+  padding: 1rem 1.5rem !important;
+  color: var(--text-dim) !important;
+  background-color: var(--quote-bg) !important;
+  border-left: 4px solid var(--quote-line) !important;
+  border-radius: 0 6px 6px 0 !important;
+}
+
+blockquote p { margin-bottom: 0 !important; }
+
+/* =========================================
+   5. Mac 风格代码窗口 (核心修正)
+   ========================================= */
+pre {
+  /* 容器 */
+  position: relative !important;
+  background-color: var(--code-bg) !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--border) !important;
+  margin: 1.5rem 0 !important;
+
+  /* ⚠️ 给红黄绿点留出足够的顶部空间 */
+  padding: 48px 20px 20px 20px !important;
+
+  /* 字体 */
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace !important;
+  font-size: 14px !important; /* 代码字号稍小一点更精致 */
+  line-height: 1.5 !important;
+  color: var(--text-main) !important; /* 强制代码为深色 */
+
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
+}
+
+/* --- 红黄绿三个点 --- */
+pre::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 18px !important;    /* 垂直居中于 Title Bar */
+  left: 16px !important;
+
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 50% !important;
+  background-color: #ff5f56 !important; /* 红点 */
+
+  /* 用 shadow 复制出黄点和绿点 */
+  box-shadow:
+    20px 0 0 #ffbd2e,  /* 黄 */
+    40px 0 0 #27c93f !important; /* 绿 */
+  z-index: 5 !important;
+}
+
+/* --- 模拟 Mac 窗口标题栏分割线 --- */
+pre::after {
+  content: "" !important;
+  position: absolute !important;
+  top: 40px !important;    /* 分割线位置 */
+  left: 0 !important;
+  width: 100% !important;
+  height: 1px !important;
+  background-color: var(--border) !important;
+  z-index: 4 !important;
+}
+
+/* 内部代码修复 */
+pre code {
+  background: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+  /* ⚠️ 强制文字颜色继承 pre 的深灰色 */
+  color: inherit !important;
+}
+
+/* 行内代码 (`...`) */
+p code, li code, td code {
+  font-family: "JetBrains Mono", Consolas, monospace !important;
+  font-size: 85% !important;
+  padding: 0.2em 0.5em !important;
+  background-color: rgba(175, 184, 193, 0.2) !important;
+  border-radius: 6px !important;
+  color: #c92c35 !important; /* 稍微深一点的红色，阅读更清晰 */
+}
+
+/* =========================================
+   6. 表格与分割线
+   ========================================= */
+table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  display: block !important;
+  overflow-x: auto !important;
+  margin-bottom: 1.5rem !important;
+}
+
+th, td {
+  border: 1px solid var(--border) !important;
+  padding: 10px 15px !important;
+}
+
+th { background-color: var(--bg-pure) !important; font-weight: 600 !important; }
+/* 斑马纹 */
+tr:nth-child(2n) { background-color: #fcfcfc !important; }
+
+hr {
+  border: none !important;
+  border-top: 2px solid var(--border) !important;
+  margin: 3rem 0 !important;
+}
